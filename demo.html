@@ -1,0 +1,31 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>jsEdit Demo</title>
+    <link rel="stylesheet" type="text/css" href="Document.css"/>
+</head>
+<body>
+    <div id="document1">
+
+    </div>
+    <script type="text/javascript" src="Document.js"></script>
+    <script type="text/javascript">
+        var doc = new Document();
+
+        var p1 = new Paragraph();
+        p1.setText("First paragraph");
+        var p2 = new Paragraph();
+        p2.setText("Second paragraph");
+        var p3 = new Paragraph();
+        p3.setText("Third paragraph");
+
+        doc.contentSeries.push(p1);
+        doc.contentSeries.push(p2);
+        doc.contentSeries.push(p3);
+
+        var display = new Display('document1', doc);
+        display.Update();
+    </script>
+</body>
+</html>
