@@ -4,6 +4,9 @@
     <meta charset="utf-8" />
     <title>jsEdit Demo</title>
     <link rel="stylesheet" type="text/css" href="Document.css"/>
+    <script type="text/javascript" src="http://code.jquery.com/jquery-2.0.3.min.js"></script>
+    <script type="text/javascript" src="http://cdn.jsdelivr.net/rangy/1.2.3/rangy-core.js"></script>
+    <script type="text/javascript" src="http://cdn.jsdelivr.net/rangy/1.2.3/rangy-cssclassapplier.js"></script>
 </head>
 <body>
     <div id="document1">
@@ -13,11 +16,11 @@
     <script type="text/javascript">
         var doc = new Document();
 
-        var p1 = new Paragraph();
+        var p1 = new Paragraph(doc.id);
         p1.setText("First paragraph");
-        var p2 = new Paragraph();
+        var p2 = new Paragraph(doc.id);
         p2.setText("Second paragraph");
-        var p3 = new Paragraph();
+        var p3 = new Paragraph(doc.id);
         p3.setText("Third paragraph");
 
         doc.contentSeries.push(p1);
@@ -26,6 +29,7 @@
 
         var display = new Display('document1', doc);
         display.Update();
+        
     </script>
 </body>
 </html>

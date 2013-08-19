@@ -1,5 +1,12 @@
-//#region Common Enumerations
+//#region VSDOC References
+/// <reference path="http://code.jquery.com/jquery-2.0.3.min.js" />
+/// <reference path="http://cdn.jsdelivr.net/rangy/1.2.3/rangy-core.js" />
+/// <reference path="http://cdn.jsdelivr.net/rangy/1.2.3/rangy-cssclassapplier.js" />
+//#endregion
+
+//#region Globals and Enums
 var ContentType = {
+    DOCUMENT: "DOCUMENT",
     PARAGRAPH: "PARAGRAPH",
     TABLE: "TABLE",
     IMAGE: "MAGE"
@@ -9,17 +16,38 @@ var EditAction = {
     REPLACE_RANGE: "REPLACE_RANGE",
     FORMAT: "FORMAT"
 };
+
+var selectionApplier;
 //#endregion
 
 //#region Document Content Representation
+var ContentNode = function (parent) {
+    /// <summary>A general class describing a Content object</summary>
+
+    /// <field name="id" type="Guid" />
+    this.id = new Guid();
+
+    /// <field name="type" />
+    this.type = undefined;
+
+    /// <field name="parent" />
+    this.parent = parent;
+
+}
+
 var Document = function () {
     ///<summary>
     /// Representation of a jsEdit document
     ///</summary>
+    ContentNode.call(this, null);
+
+    this.type = ContentType.DOCUMENT;
     this.contentSeries = new ContentSeries(this);
     this.contentStore = new ContentStore(this);
-    this.selection = null;
+    this.selection = new TextRange(new DocumentPosition(0), new DocumentPosition(0));
 };
+Document.prototype = Object.create(ContentNode.prototype);
+Document.prototype.constructor = Document;
 
 var ContentSeries = function (doc) {
     /// <param name="doc" type="Document" />
@@ -39,11 +67,23 @@ var ContentSeries = function (doc) {
         return new ContentIterator(contentNodes.slice(0));
     };
 
-    this.push = function(node) {
+    this.push = function (node) {
         /// <param name="node" type="ContentNode" />
         contentNodes.push(node);
         doc.contentStore.put(node);
-    }
+    };
+
+    this.indexOf = function (guid) {
+        ///<param name="guid" type="Guid" />
+        ///<returns type="Number"/>
+        var i = -1;
+        contentNodes.forEach(function (node, index) {
+            if (node.id.equals(guid))
+                i = index;
+        });
+        console.assert(i != -1, "Element not found");
+        return i;
+    };
 };
 
 var Guid = function (guidString) {
@@ -60,7 +100,7 @@ var Guid = function (guidString) {
                    .substring(1);
     };
 
-    var guid = s4() + s4() + '-' + s4() + '-' + s4()
+    var guid = (guidString) ? guidString : s4() + s4() + '-' + s4() + '-' + s4()
         + '-' + s4() + '-' + s4() + s4() + s4();
 
     this.guid = guid;
@@ -69,20 +109,12 @@ var Guid = function (guidString) {
 
     this.equals = function (other) {
         /// <param name="other" type="Guid"/>
-        return (other) ? this.toString == other.toString : false;
+        return (other) ? this.toString() == other.toString() : false;
     };
 }
 
-var ContentNode = function () {
-    /// <summary>A general class describing a Content object</summary>
-    /// <field name="id" type="Guid" />
-    this.id = new Guid();
-    /// <field name="type" />
-    this.type = undefined;
-}
-
-var Paragraph = function () {
-    ContentNode.call(this);
+var Paragraph = function (parent) {
+    ContentNode.call(this, parent);
 
     var _text;
 
@@ -146,29 +178,29 @@ var Formatting = function () {
     }
 }
 
-var Table = function () {
-    ContentNode.call(this);
+var Table = function (parent) {
+    ContentNode.call(this, parent);
 
 };
 Table.prototype = Object.create(ContentNode.prototype);
 Table.prototype.constructor = Table;
 
-var TableRow = function () {
-    ContentNode.call(this);
+var TableRow = function (parent) {
+    ContentNode.call(this, parent);
 
 };
 TableRow.prototype = Object.create(ContentNode.prototype);
 TableRow.prototype.constructor = TableRow;
 
-var TableCell = function () {
-    ContentNode.call(this);
+var TableCell = function (parent) {
+    ContentNode.call(this, parent);
 
 };
 TableCell.prototype = Object.create(ContentNode.prototype);
 TableCell.prototype.constructor = TableCell;
 
-var Image = function () {
-    ContentNode.call(this);
+var Image = function (parent) {
+    ContentNode.call(this, parent);
 
 };
 Image.prototype = Object.create(ContentNode.prototype);
@@ -182,15 +214,18 @@ var ContentStore = function (doc) {
 
     var contentNodes = {};
     var _doc = doc;
+    contentNodes[doc.id.toString()] = doc;
+
     this.get = function (guid) {
         /// <param name="guid" type="Guid" />
         /// <returns type="ContentNode">
-        return contentNodes[guid];
+        return contentNodes[guid.toString()];
     };
     this.put = function (node) {
         /// <param name="node" type="ContentNode" />
-        contentNodes[node.id] = node;
+        contentNodes[node.id.toString()] = node;
     };
+
 };
 
 var ContentIterator = function (array) {
@@ -236,6 +271,14 @@ var DocumentPosition = function (index, subposition) {
             return (!other.subposition);
         }
     };
+
+    this.toString = function () {
+        var text = index.toString();
+        if (this.subposition)
+            text += ">" + this.subposition.toString();
+        return text;
+    };
+
 };
 
 var TextRange = function (startPosition, endPosition) {
@@ -285,25 +328,62 @@ var FormatArgs = function (selection, formatting) {
 var Display = function (id, doc) {
     /// <param name="id" type="String" />
     /// <param name="doc" type="Document" />
-    var _element = document.getElementById(id);
+    var _element = $("#" + id);
     var _html = "";
     var _doc = doc;
 
+    _element.on("mouseup", function () {
+
+        var s = window.getSelection();
+        if (s.isCollapsed) {
+            var range = s.getRangeAt(0);
+            var container = range.startContainer;
+            var parent = container.parentNode;
+
+            if (container.nodeType != Node.TEXT_NODE) {
+                parent = container;
+                container = container.childNodes[1];
+            }
+
+            var replacement = container.splitText(range.startOffset);
+            var selector = $("<span>").addClass("snew")[0];
+            parent.insertBefore(selector, replacement);
+
+        } else {
+            selectionApplier.applyToSelection();
+        }
+
+        $(".selected").contents().unwrap();
+        $(".selected").remove();
+        $(".snew").removeClass("snew").addClass("selected");
+
+        s.empty();
+
+        var selFirst = $(".selected").first();
+        var selLast = $(".selected").last();
+
+        var p1 = getPos(selFirst, false);
+        var p2 = getPos(selLast, true);
+
+        _doc.selection = new TextRange(p1, p2);
+
+    });
+
     this.Update = function() {
-        _element.innerHTML = "";
+        _element.empty();
         var iterator = _doc.contentSeries.getIterator();
 
         while (contentNode = iterator.nextNode() )
         {
             switch (contentNode.type) {
                 case ContentType.PARAGRAPH:
-                    _element.innerHTML += _generateParagraph(contentNode);
+                    _element.append(_generateParagraph(contentNode))
                     break;
                 case ContentType.TABLE:
-                    _element.innerHTML += _generateTable(contentNode);
+                    _element.append(_generateTable(contentNode))
                     break;
                 case ContentType.IMAGE:
-                    _element.innerHTML += _generateImage(contentNode);
+                    _element.append(_generateImage(contentNode))
                     break;
             }
         }
@@ -311,15 +391,63 @@ var Display = function (id, doc) {
     };
 
     var _generateParagraph = function (paragraph) {
-        return "<p>" + paragraph.getText() + "</p>";
+        /// <param name="paragraph" type="Paragraph">
+        var p = $('<p>');
+        p.attr("id", paragraph.id.valueOf()).html(paragraph.getText());
+        return p[0];
     };
 
     var _generateTable = function (table) {
-        return "";
+        return document.createElement("table");
     };
 
     var _generateImage = function (image) {
-        return "";
+        return document.createElement("img");
     };
+
+    function getPos(marker, end) {
+
+        // Calculate start positon
+        var parent = marker.closest("*[id]");
+        var nodeId = new Guid(parent.attr("id"));
+        var search = [];
+        var num = 0;
+
+        for (i = 0; i < parent[0].childNodes.length; i++) {
+            var node = parent[0].childNodes[i];
+            if (node.nodeType == Node.TEXT_NODE) {
+                num += node.length;
+            } else { break; }
+        }
+        if (end)
+            num += marker.text().length;
+
+        var start = new DocumentPosition(num, start);
+
+        var node;
+        do {
+            node = _doc.contentStore.get(nodeId);
+            search.push(nodeId);
+        }
+        while (node.parent && (nodeId = new Guid(node.parent)));
+
+        console.assert(_doc.id.equals(search.pop()), "Document ID mismatch");
+
+        var contentSeries = _doc.contentSeries;
+        var next;
+        while (next = search.pop()) {
+            num = contentSeries.indexOf(next);
+            start = new DocumentPosition(num, start);
+        }
+
+        return start;
+    }
 }
+//#endregion
+
+//#region Initialization...
+$(document).ready(function () {
+    rangy.init();
+    selectionApplier = rangy.createCssClassApplier("snew");
+});
 //#endregion
