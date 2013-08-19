@@ -113,6 +113,9 @@ var Document = function () {
     this.selectRight = function (shift) {
         var pos;
 
+        if (this.selection.isCollapsed() === true) {
+            shift_state = "";
+        }
         if (shift_state === "l") {
             pos = this.selection.startPosition;
         } else {
@@ -121,6 +124,8 @@ var Document = function () {
         if (shift === false) {
             if (shift_state !== "") {
                 shift_state = "";
+            }
+            if (this.selection.isCollapsed() === false) {
                 this.selection = new TextRange(pos);
                 return;
             }
@@ -156,6 +161,9 @@ var Document = function () {
 
     this.selectLeft = function (shift) {
         var pos;
+        if (this.selection.isCollapsed() === true) {
+            shift_state = "";
+        }
 
         if (shift_state === "l" || shift_state === "") {
             pos = this.selection.startPosition;
@@ -165,6 +173,8 @@ var Document = function () {
         if (shift === false) {
             if (shift_state !== "") {
                 shift_state = "";
+            }
+            if (this.selection.isCollapsed() === false) {
                 this.selection = new TextRange(pos);
                 return;
             }
@@ -515,7 +525,7 @@ var TextRange = function (startPosition, endPosition) {
     this.isCollapsed = function () {
         /// <summary>Returns whether the current TextRange is collapsed</summary>
         /// <returns type="Boolean"></returns>
-        return this.startPosition.equals(endPosition);
+        return this.startPosition.equals(this.endPosition);
     };
 };
 //#endregion
@@ -556,7 +566,7 @@ var Display = function (id, doc) {
     _element.on("mouseup", function () {
 
         var s = window.getSelection();
-        if (s.isCollapsed) {
+        if (s.isCollapsed ) {
             var range = s.getRangeAt(0);
             var container = range.startContainer;
             var parent = container.parentNode;
