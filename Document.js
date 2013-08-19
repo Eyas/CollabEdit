@@ -17,6 +17,14 @@ var EditAction = {
     FORMAT: "FORMAT"
 };
 
+var KeyboardKeys = {
+    Left: 37,
+    Up: 38,
+    Right: 39,
+    Down: 40,
+    Backspace: 8,
+}
+
 var selectionApplier;
 //#endregion
 
@@ -30,8 +38,28 @@ var ContentNode = function (parent) {
     /// <field name="type" />
     this.type = undefined;
 
-    /// <field name="parent" />
+    /// <field name="parent" type="ContentNode" />
     this.parent = parent;
+
+    /// <field name="contentSeries" type="ContentSeries" />
+    this.contentSeries = undefined;
+
+    this.getAtIndex = function (index) {
+        ///<param name="index" type="Number"/>
+        ///<returns type="ContentNode"/>
+        throw "NotImplementedException: ContentNode.getAtIndex";
+    };
+
+    this.hasIndex = function (index) {
+        ///<param name="index" type="Number"/>
+        ///<returns type="Boolean"/>
+        throw "NotImplementedException: ContentNode.hasIndex";
+    };
+
+    this.maxIndex = function () {
+        ///<returns type="Number"/>
+        throw "NotImplementedException: ContentNode.hasIndex";
+    };
 
 }
 
@@ -45,6 +73,134 @@ var Document = function () {
     this.contentSeries = new ContentSeries(this);
     this.contentStore = new ContentStore(this);
     this.selection = new TextRange(new DocumentPosition(0, new DocumentPosition(0)), new DocumentPosition(0, new DocumentPosition(0)));
+
+    // private state:
+    var shift_state = "";
+
+    this.getAtIndex = function (index) {
+        ///<param name="index" type="Number"/>
+        ///<returns type="ContentNode"/>
+        return this.contentSeries.getNode(index);
+    };
+
+    this.hasIndex = function (index) {
+        ///<param name="index" type="Number"/>
+        ///<returns type="Boolean"/>
+        return this.contentSeries.hasIndex(index);
+    };
+
+    this.maxIndex = function () {
+        ///<returns type="Number"/>
+        return this.contentSeries.maxIndex();
+    };
+
+    this.locate = function (position) {
+        ///<summary>returns the ContentNode that contains the given position</summary>
+        ///<param name="position" type="DocumentPosition"/>
+        ///<returns type="ContentNode"/>
+        var indices = position.getDomTraversal();
+        var current = this;
+        var index;
+        while ((index = indices.pop()) !== undefined) {
+            current = current.getAtIndex(index);
+
+            if (current === null || current === undefined)
+                return undefined;
+        }
+        return current;
+    };
+
+    this.selectRight = function (shift) {
+        var pos;
+
+        if (shift_state === "l") {
+            pos = this.selection.startPosition;
+        } else {
+            pos = this.selection.endPosition;
+        }
+        if (shift === false) {
+            if (shift_state !== "") {
+                shift_state = "";
+                this.selection = new TextRange(pos);
+                return;
+            }
+        }
+        if (shift === true && shift_state === "") {
+            shift_state = "r";
+        }
+
+        var node = this.locate(pos);
+        if (node.hasIndex(pos.index + 1)) {
+            pos = pos.getNext();
+        } else {
+            pos = pos.getParent().getNext().getChild();
+            if (this.locate(pos) === undefined)
+                return;
+        }
+
+        if (shift) {
+
+            var l = this.selection.startPosition;
+            var r = this.selection.endPosition;
+            switch (shift_state) {
+                case "l": l = pos; break;
+                case "r": r = pos; break;
+                default: throw "Unexpected shift_state " + shift_state;
+            }
+            this.selection = new TextRange(l, r);
+
+        } else {
+            this.selection = new TextRange(pos);
+        }
+    };
+
+    this.selectLeft = function (shift) {
+        var pos;
+
+        if (shift_state === "l" || shift_state === "") {
+            pos = this.selection.startPosition;
+        } else {
+            pos = this.selection.endPosition;
+        }
+        if (shift === false) {
+            if (shift_state !== "") {
+                shift_state = "";
+                this.selection = new TextRange(pos);
+                return;
+            }
+        }
+        if (shift === true && shift_state === "") {
+            shift_state = "l";
+        }
+
+        var node = this.locate(pos);
+        if (node.hasIndex(pos.index - 1)) {
+            pos = pos.getPrevious();
+        }
+        else {
+            pos = pos.getParent().getPrevious().getChild();
+            node = this.locate(pos);
+            if (node === undefined)
+                return;
+            pos = new DocumentPosition(node.maxIndex(), pos.parent);
+        }
+
+        if (shift) {
+            var l = this.selection.startPosition;
+            var r = this.selection.endPosition;
+            switch (shift_state) {
+                case "l": l = pos; break;
+                case "r": r = pos; break;
+                default: throw "Unexpected shift_state " + shift_state;
+            }
+            this.selection = new TextRange(l, r);
+
+        } else {
+            this.selection = new TextRange(pos);
+        }
+    };
+
+
 };
 Document.prototype = Object.create(ContentNode.prototype);
 Document.prototype.constructor = Document;
@@ -60,6 +216,17 @@ var ContentSeries = function (doc) {
         /// <param name="index" type="Number" />
         /// <returns type="ContentNode" />
         return contentNodes[index];
+    };
+
+    this.hasIndex = function (index) {
+        ///<param name="index" type="Number"/>
+        ///<returns type="Boolean"/>
+        return (contentNodes[index]) ? true : false;
+    };
+
+    this.maxIndex = function () {
+        ///<returns type="Number"/>
+        return contentNodes.length - 1;
     };
 
     this.getIterator = function() {
@@ -125,7 +292,7 @@ var Paragraph = function (parent) {
         ///<summary>
         ///change the paragraph text
         ///</summary>
-        ///<param name="text"></param>
+        ///<param name="text" type="String"></param>
         _text = text;
     };
 
@@ -144,7 +311,21 @@ var Paragraph = function (parent) {
         if (actualLength !== expectedLength) {
             alert("Expected Paragraph Length is " + expectedLength + " actual: " + actualLength);
         }
-    }
+    };
+
+    this.getAtIndex = function (index) {
+        return this;
+    };
+
+    this.hasIndex = function (index) {
+        ///<param name="index" type="Number"/>
+        ///<returns type="Boolean"/>
+        return (index >= 0 && index <= _text.length)
+    };
+
+    this.maxIndex = function () {
+        return _text.length;
+    };
 
 };
 Paragraph.prototype = Object.create(ContentNode.prototype);
@@ -274,7 +455,7 @@ var DocumentPosition = function (index, parent) {
 
     this.toString = function () {
         ///<returns type="String"/>
-        var text = index.toString();
+        var text = index.pad(7);
         if (this.parent)
             text = this.parent.toString() + ">" + text;
         return text;
@@ -282,7 +463,7 @@ var DocumentPosition = function (index, parent) {
 
     this.hasParent = function () {
         ///<returns type="Boolean"/>
-        return (this.parent) ? true : false;
+        return (this.parent !== undefined) ? true : false;
     };
 
     this.getParent = function () {
@@ -294,21 +475,42 @@ var DocumentPosition = function (index, parent) {
         return new DocumentPosition(this.index + 1, this.parent);
     };
 
+    this.getPrevious = function () {
+        return new DocumentPosition(this.index - 1, this.parent);
+    };
+
     this.getChild = function () {
         return new DocumentPosition(0, this);
     };
+
+    this.getDomTraversal = function () {
+        ///<remarks>access from parent-to-child through pop</remarks>
+        ///<returns type="Array"/>
+        var order = [];
+        var at = this;
+        do {
+            order.push(at.index);
+        } while (at = at.parent);
+        return order;
+    }
 };
 
 var TextRange = function (startPosition, endPosition) {
+    /// <signature>
     /// <summary>Class representing a range of text and elements within a document</summary>
     /// <param name="startPosition" type="DocumentPosition" />
     /// <param name="endPosition" type="DocumentPosition" />
+    /// </signature>
+    /// <signature>
+    /// <summary>Class representing a range of text and elements within a document</summary>
+    /// <param name="startPosition" type="DocumentPosition" />
+    /// </signature>
 
     /// <field name="startPosition" type="DocumentPosition" />
     this.startPosition = startPosition;
 
     /// <field name="endPosition" type="DocumentPosition" />
-    this.endPosition = endPosition;
+    this.endPosition = (endPosition) ? endPosition : startPosition;
 
     this.isCollapsed = function () {
         /// <summary>Returns whether the current TextRange is collapsed</summary>
@@ -349,6 +551,7 @@ var Display = function (id, doc) {
     var _element = $("#" + id);
     var _html = "";
     var _doc = doc;
+    var _self = this;
 
     _element.on("mouseup", function () {
 
@@ -387,6 +590,21 @@ var Display = function (id, doc) {
 
     });
 
+    $(document).keydown(function (event) {
+        switch (event.which)
+        {
+            case KeyboardKeys.Right:
+                _doc.selectRight(event.shiftKey);
+                break;
+            case KeyboardKeys.Left:
+                _doc.selectLeft(event.shiftKey);
+                break;
+        }
+
+        _self.Update();
+        event.preventDefault();
+    });
+
     var UpdateState = function () {
         this.currentPosition = new DocumentPosition(0);
         this.selectionOngoing = false;
@@ -397,7 +615,7 @@ var Display = function (id, doc) {
         var iterator = _doc.contentSeries.getIterator();
 
         var state = new UpdateState();
-        while (contentNode = iterator.nextNode() )
+        while ( (contentNode = iterator.nextNode()) !== undefined )
         {
             switch (contentNode.type) {
                 case ContentType.PARAGRAPH:
@@ -504,4 +722,6 @@ $(document).ready(function () {
     rangy.init();
     selectionApplier = rangy.createCssClassApplier("snew");
 });
+
+Number.prototype.pad = function(size) { return ('000000000' + this.toString()).substr(-size); };
 //#endregion
