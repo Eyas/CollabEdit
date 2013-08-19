@@ -44,7 +44,7 @@ var Document = function () {
     this.type = ContentType.DOCUMENT;
     this.contentSeries = new ContentSeries(this);
     this.contentStore = new ContentStore(this);
-    this.selection = new TextRange(new DocumentPosition(0), new DocumentPosition(0));
+    this.selection = new TextRange(new DocumentPosition(0, new DocumentPosition(0)), new DocumentPosition(0, new DocumentPosition(0)));
 };
 Document.prototype = Object.create(ContentNode.prototype);
 Document.prototype.constructor = Document;
@@ -239,10 +239,10 @@ var ContentIterator = function (array) {
 //#endregion
 
 //#region Document Interaction Representation
-var DocumentPosition = function (index, subposition) {
+var DocumentPosition = function (index, parent) {
     /// <signature>
     /// <param name="index" type="Number"></param>
-    /// <param name="subposition" type="DocumentPosition"></param>
+    /// <param name="parent" type="DocumentPosition"></param>
     /// </signature>
     /// <signature>
     /// <param name="index" type="Number"></param>
@@ -251,9 +251,9 @@ var DocumentPosition = function (index, subposition) {
     /// <field name="index" type="Number"/>
     this.index = index;
 
-    /// <field name="subposition" type="DocumentPosition"/>
-    this.subposition = null;
-    if (subposition) this.subposition = subposition;
+    /// <field name="parent" type="DocumentPosition"/>
+    this.parent = null;
+    if (parent) this.parent = parent;
 
     this.equals = function (other) {
         /// <summary>returns whether this DocumentPosition is equal to other</summary>
@@ -263,22 +263,40 @@ var DocumentPosition = function (index, subposition) {
         if (this.index != other.index)
             return false;
 
-        if (this.subposition) {
-            if (!other.subposition)
+        if (this.parent) {
+            if (!other.parent)
                 return false;
-            return this.subposition.equals(other.subposition);
+            return this.parent.equals(other.parent);
         } else {
-            return (!other.subposition);
+            return (!other.parent);
         }
     };
 
     this.toString = function () {
+        ///<returns type="String"/>
         var text = index.toString();
-        if (this.subposition)
-            text += ">" + this.subposition.toString();
+        if (this.parent)
+            text = this.parent.toString() + ">" + text;
         return text;
     };
 
+    this.hasParent = function () {
+        ///<returns type="Boolean"/>
+        return (this.parent) ? true : false;
+    };
+
+    this.getParent = function () {
+        console.assert(this.hasParent(), "Calling getParent on top level element");
+        return this.parent;
+    };
+
+    this.getNext = function () {
+        return new DocumentPosition(this.index + 1, this.parent);
+    };
+
+    this.getChild = function () {
+        return new DocumentPosition(0, this);
+    };
 };
 
 var TextRange = function (startPosition, endPosition) {
@@ -369,39 +387,73 @@ var Display = function (id, doc) {
 
     });
 
+    var UpdateState = function () {
+        this.currentPosition = new DocumentPosition(0);
+        this.selectionOngoing = false;
+    };
+
     this.Update = function() {
         _element.empty();
         var iterator = _doc.contentSeries.getIterator();
 
+        var state = new UpdateState();
         while (contentNode = iterator.nextNode() )
         {
             switch (contentNode.type) {
                 case ContentType.PARAGRAPH:
-                    _element.append(_generateParagraph(contentNode))
+                    _element.append(_generateParagraph(contentNode, state))
                     break;
                 case ContentType.TABLE:
-                    _element.append(_generateTable(contentNode))
+                    _element.append(_generateTable(contentNode, state))
                     break;
                 case ContentType.IMAGE:
-                    _element.append(_generateImage(contentNode))
+                    _element.append(_generateImage(contentNode, state))
                     break;
             }
+            state.currentPosition = state.currentPosition.getNext();
         }
 
     };
 
-    var _generateParagraph = function (paragraph) {
-        /// <param name="paragraph" type="Paragraph">
+    var _generateParagraph = function (paragraph, state) {
+        /// <param name="paragraph" type="Paragraph"/>
+        /// <param name="state" type="UpdateState"/>
         var p = $('<p>');
-        p.attr("id", paragraph.id.valueOf()).html(paragraph.getText());
+        p.attr("id", paragraph.id.valueOf());
+        var text = paragraph.getText();
+        var html = "";
+        var i = 0;
+
+        if (state.currentPosition.equals(_doc.selection.startPosition.getParent())) {
+            html += text.substring(0, _doc.selection.startPosition.index);
+            state.selectionOngoing = true;
+            i = _doc.selection.startPosition.index;
+        }
+
+        if (state.selectionOngoing) {
+            html += "<span class='selected'>";
+        }
+
+        if (state.currentPosition.equals(_doc.selection.endPosition.getParent())) {
+            html += text.substring(i, _doc.selection.endPosition.index);
+            html += "</span>";
+            state.selectionOngoing = false;
+            i = _doc.selection.endPosition.index;
+        }
+
+        html += text.substring(i);
+
+        if (state.selectionOngoing) html += "</span>";
+        p.html(html);
+
         return p[0];
     };
 
-    var _generateTable = function (table) {
+    var _generateTable = function (table, currentPosition) {
         return document.createElement("table");
     };
 
-    var _generateImage = function (image) {
+    var _generateImage = function (image, currentPosition) {
         return document.createElement("img");
     };
 
@@ -422,7 +474,8 @@ var Display = function (id, doc) {
         if (end)
             num += marker.text().length;
 
-        var start = new DocumentPosition(num, start);
+        var position = new DocumentPosition(num);
+        var start = position;
 
         var node;
         do {
@@ -437,10 +490,11 @@ var Display = function (id, doc) {
         var next;
         while (next = search.pop()) {
             num = contentSeries.indexOf(next);
-            start = new DocumentPosition(num, start);
+            start.parent = new DocumentPosition(num);
+            start = start.parent;
         }
 
-        return start;
+        return position;
     }
 }
 //#endregion
