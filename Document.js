@@ -31,6 +31,7 @@ var selectionApplier;
 //#region Document Content Representation
 var ContentNode = function (parent) {
     /// <summary>A general class describing a Content object</summary>
+    // <param name="parent" type="ContentNode" />
 
     /// <field name="id" type="Guid" />
     this.id = new Guid();
@@ -110,6 +111,22 @@ var Document = function () {
         return current;
     };
 
+    var finalize_shift = function (shift, pos) {
+        if (shift) {
+            var l = this.selection.startPosition;
+            var r = this.selection.endPosition;
+            switch (shift_state) {
+                case "l": l = pos; break;
+                case "r": r = pos; break;
+                default: throw "Unexpected shift_state " + shift_state;
+            }
+            this.selection = new TextRange(l, r);
+
+        } else {
+            this.selection = new TextRange(pos);
+        }
+    };
+
     this.selectRight = function (shift) {
         var pos;
 
@@ -142,21 +159,94 @@ var Document = function () {
             if (this.locate(pos) === undefined)
                 return;
         }
+        finalize_shift.call(this, shift, pos);
+    };
 
-        if (shift) {
+    this.selectDown = function (shift) {
+        var pos;
 
-            var l = this.selection.startPosition;
-            var r = this.selection.endPosition;
-            switch (shift_state) {
-                case "l": l = pos; break;
-                case "r": r = pos; break;
-                default: throw "Unexpected shift_state " + shift_state;
-            }
-            this.selection = new TextRange(l, r);
-
-        } else {
-            this.selection = new TextRange(pos);
+        if (this.selection.isCollapsed() === true) {
+            shift_state = "";
         }
+        if (shift_state === "l") {
+            pos = this.selection.startPosition;
+        } else {
+            pos = this.selection.endPosition;
+        }
+        if (shift === false) {
+            if (shift_state !== "") {
+                shift_state = "";
+            }
+            if (this.selection.isCollapsed() === false) {
+                this.selection = new TextRange(pos);
+                return;
+            }
+        }
+        if (shift === true && shift_state === "") {
+            shift_state = "r";
+        }
+
+        var charIndex = pos.index;
+        pos = pos.getParent();
+        var node = this.locate(pos);
+        if (node.parent.hasIndex(pos.index + 1)) {
+            pos = pos.getNext().getChild();
+            node = this.locate(pos);
+            if (node.hasIndex(charIndex))
+                pos = new DocumentPosition(charIndex, pos.parent);
+            else
+                pos = new DocumentPosition(node.maxIndex(), pos.parent);
+        }
+        else {
+            pos = new DocumentPosition(0, pos);
+            node = this.locate(pos);
+            if (node === undefined)
+                return;
+            pos = new DocumentPosition(node.maxIndex(), pos.parent);
+        }
+        finalize_shift.call(this, shift, pos);
+    };
+
+    this.selectUp = function (shift) {
+        var pos;
+        if (this.selection.isCollapsed() === true) {
+            shift_state = "";
+        }
+
+        if (shift_state === "l" || shift_state === "") {
+            pos = this.selection.startPosition;
+        } else {
+            pos = this.selection.endPosition;
+        }
+        if (shift === false) {
+            if (shift_state !== "") {
+                shift_state = "";
+            }
+        }
+        if (shift === true && shift_state === "") {
+            shift_state = "l";
+        }
+
+        var charIndex = pos.index;
+        pos = pos.getParent();
+        var node = this.locate(pos);
+
+        if (node.parent.hasIndex(pos.index - 1)) {
+            pos = pos.getPrevious().getChild();
+            node = this.locate(pos);
+            if (node.hasIndex(charIndex))
+                pos = new DocumentPosition(charIndex, pos.parent);
+            else
+                pos = new DocumentPosition(node.maxIndex(), pos.parent);
+        }
+        else {
+            pos = new DocumentPosition(0, pos);
+            node = this.locate(pos);
+            if (node === undefined)
+                return;
+        }
+
+        finalize_shift.call(this, shift, pos);
     };
 
     this.selectLeft = function (shift) {
@@ -195,19 +285,7 @@ var Document = function () {
             pos = new DocumentPosition(node.maxIndex(), pos.parent);
         }
 
-        if (shift) {
-            var l = this.selection.startPosition;
-            var r = this.selection.endPosition;
-            switch (shift_state) {
-                case "l": l = pos; break;
-                case "r": r = pos; break;
-                default: throw "Unexpected shift_state " + shift_state;
-            }
-            this.selection = new TextRange(l, r);
-
-        } else {
-            this.selection = new TextRange(pos);
-        }
+        finalize_shift.call(this, shift, pos);
     };
 
 
@@ -291,6 +369,7 @@ var Guid = function (guidString) {
 }
 
 var Paragraph = function (parent) {
+    /// <param name="parent" type="ContentNode"/>
     ContentNode.call(this, parent);
 
     var _text;
@@ -370,6 +449,7 @@ var Formatting = function () {
 }
 
 var Table = function (parent) {
+    /// <param name="parent" type="ContentNode"/>
     ContentNode.call(this, parent);
 
 };
@@ -377,6 +457,7 @@ Table.prototype = Object.create(ContentNode.prototype);
 Table.prototype.constructor = Table;
 
 var TableRow = function (parent) {
+    /// <param name="parent" type="ContentNode"/>
     ContentNode.call(this, parent);
 
 };
@@ -384,6 +465,7 @@ TableRow.prototype = Object.create(ContentNode.prototype);
 TableRow.prototype.constructor = TableRow;
 
 var TableCell = function (parent) {
+    /// <param name="parent" type="ContentNode"/>
     ContentNode.call(this, parent);
 
 };
@@ -391,6 +473,7 @@ TableCell.prototype = Object.create(ContentNode.prototype);
 TableCell.prototype.constructor = TableCell;
 
 var Image = function (parent) {
+    /// <param name="parent" type="ContentNode"/>
     ContentNode.call(this, parent);
 
 };
@@ -609,6 +692,12 @@ var Display = function (id, doc) {
             case KeyboardKeys.Left:
                 _doc.selectLeft(event.shiftKey);
                 break;
+            case KeyboardKeys.Up:
+                _doc.selectUp(event.shiftKey);
+                break;
+            case KeyboardKeys.Down:
+                _doc.selectDown(event.shiftKey);
+                break;
         }
 
         _self.Update();
@@ -710,7 +799,7 @@ var Display = function (id, doc) {
             node = _doc.contentStore.get(nodeId);
             search.push(nodeId);
         }
-        while (node.parent && (nodeId = new Guid(node.parent)));
+        while (node.parent && (nodeId = node.parent.id));
 
         console.assert(_doc.id.equals(search.pop()), "Document ID mismatch");
 
