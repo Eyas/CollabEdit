@@ -680,7 +680,7 @@ var Display = function (id, doc) {
         var p2 = getPos(selLast, true);
 
         _doc.selection = new TextRange(p1, p2);
-
+        _self.Update();
     });
 
     $(document).keydown(function (event) {
@@ -736,6 +736,7 @@ var Display = function (id, doc) {
         /// <param name="paragraph" type="Paragraph"/>
         /// <param name="state" type="UpdateState"/>
         var p = $('<p>');
+        p.addClass("charSelectable");
         p.attr("id", paragraph.id.valueOf());
         var text = paragraph.getText();
         var html = "";
@@ -777,7 +778,7 @@ var Display = function (id, doc) {
     function getPos(marker, end) {
 
         // Calculate start positon
-        var parent = marker.closest("*[id]");
+        var parent = marker.closest(".charSelectable[id]");
         var nodeId = new Guid(parent.attr("id"));
         var search = [];
         var num = 0;
@@ -786,7 +787,12 @@ var Display = function (id, doc) {
             var node = parent[0].childNodes[i];
             if (node.nodeType == Node.TEXT_NODE) {
                 num += node.length;
-            } else { break; }
+            } else {
+                if (node.isSameNode(marker[0]))
+                    break;
+
+                num += node.innerText.length;
+            }
         }
         if (end)
             num += marker.text().length;
