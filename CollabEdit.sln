@@ -1,16 +1,21 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2013
-VisualStudioVersion = 12.0.20623.1 VSUPREVIEW
+VisualStudioVersion = 12.0.31101.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "jsEdit", "jsEdit", "{6E1C14F9-93A0-4F2C-966E-B53A46DD2CC3}"
-	ProjectSection(SolutionItems) = preProject
-		demo.html = demo.html
-		Document.css = Document.css
-		Document.js = Document.js
-	EndProjectSection
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "tsEdit", "tsEdit\tsEdit.csproj", "{34C5E0EE-488C-4471-B065-CE16A7F5FA18}"
 EndProject
 Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{34C5E0EE-488C-4471-B065-CE16A7F5FA18}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{34C5E0EE-488C-4471-B065-CE16A7F5FA18}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{34C5E0EE-488C-4471-B065-CE16A7F5FA18}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{34C5E0EE-488C-4471-B065-CE16A7F5FA18}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection

@@ -1,0 +1,71 @@
+﻿body
+{
+}
+
+p .b {
+    font-weight: bold;
+}
+
+p .i {
+    font-style: italic;
+}
+
+p .u {
+    text-decoration: underline;
+}
+
+p .big {
+    font-size: 1.3em;
+}
+
+p .small {
+    font-size: 0.8em;
+}
+
+.selected {
+    background-color: rgba(0, 141, 255, 0.40);
+}
+
+    .selected:empty::after {
+        display: inline-block;
+        content: ' ';
+        width: 0.5px;
+        border: 0;
+        background-color: #000;
+        height: 1.1em;
+        position: absolute;
+        -moz-animation: blink_cursor 1s infinite;
+        -o-animation: blink_cursor 1s infinite;
+        -webkit-animation: blink_cursor 1s infinite;
+        animation: blink_cursor 1s infinite;
+    }
+
+@-moz-keyframes blink_cursor
+{
+    0%, 100% {
+        background-color: rgba(0, 0, 0, 1);
+    }
+    30% {
+        background-color: rgba(0, 0, 0, 0);
+    }
+}
+
+@-webkit-keyframes blink_cursor
+{
+    0%, 100% {
+        background-color: rgba(0, 0, 0, 1);
+    }
+    30% {
+        background-color: rgba(0, 0, 0, 0);
+    }
+}
+
+@keyframes blink_cursor
+{
+    0%, 100% {
+        background-color: rgba(0, 0, 0, 1);
+    }
+    30% {
+        background-color: rgba(0, 0, 0, 0);
+    }
+}
