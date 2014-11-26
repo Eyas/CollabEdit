@@ -14,20 +14,20 @@
     </div>
     <script type="text/javascript" src="Document.js"></script>
     <script type="text/javascript">
-        var doc = new Document();
+        var doc = new tsEdit.Document();
 
-        var p1 = new Paragraph(doc);
+        var p1 = new tsEdit.Paragraph(doc);
         p1.setText("First paragraph");
-        var p2 = new Paragraph(doc);
+        var p2 = new tsEdit.Paragraph(doc);
         p2.setText("Second paragraph");
-        var p3 = new Paragraph(doc);
+        var p3 = new tsEdit.Paragraph(doc);
         p3.setText("Third paragraph");
 
         doc.contentSeries.push(p1);
         doc.contentSeries.push(p2);
         doc.contentSeries.push(p3);
 
-        var display = new Display('document1', doc);
+        var display = new tsEdit.Display('document1', doc);
         display.Update();
         
     </script>
