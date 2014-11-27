@@ -81,6 +81,7 @@ module tsEdit {
         maxIndex(): number;
         firstLeaf(): Maybe<LeafNode>;
         lastLeaf(): Maybe<LeafNode>;
+        validate(): void;
     }
 
     export interface IContainingNode extends IContentNode {
@@ -103,11 +104,14 @@ module tsEdit {
             this.parent = new Some(parent);
         }
 
+        validate(): void {
+            throw new Error("NotImplementedException: LeafNode.validate");
+        }
         hasIndex(index: number): boolean {
-            throw new Error("NotImplementedException: ContentNode.hasIndex");
+            throw new Error("NotImplementedException: LeafNode.hasIndex");
         }
         maxIndex(): number {
-            throw new Error("NotImplementedException: ContentNode.maxIndex");
+            throw new Error("NotImplementedException: LeafNode.maxIndex");
         }
         firstLeaf(): Maybe<LeafNode> {
             return new Some(this);
@@ -179,6 +183,12 @@ module tsEdit {
         }
         maxIndex(): number {
             return this.contentSeries.maxIndex();
+        }
+        validate(): void {
+            console.assert(this.contentSeries.maxIndex() >= 0, "Must contain elements");
+            this.forEach((n: IContentNode) => {
+                n.validate();
+            });
         }
         forEach(fn: (v: IContentNode) => void): void {
             this.contentSeries.forEach(fn);
@@ -379,6 +389,7 @@ module tsEdit {
             } else {
                 throw Error("TODO: not yet implemented");
             }
+            this.validate();
         }
     };
 
@@ -515,11 +526,23 @@ module tsEdit {
         constructor(parent: ContainingNode) {
             super(new Some(parent), ContentType.TABLE);
         }
+        validate() {
+            this.forEach((node: IContentNode) => {
+                console.assert(node.type === ContentType.TABLE_ROW);
+            });
+            super.validate();
+        }
     };
 
     export class TableRow extends ContainingNode {
         constructor(parent: Table) {
             super(new Some(parent), ContentType.TABLE_ROW);
+        }
+        validate() {
+            this.forEach((node: IContentNode) => {
+                console.assert(node.type === ContentType.TABLE_CELL);
+            });
+            super.validate();
         }
     };
 
