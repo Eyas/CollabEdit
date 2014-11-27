@@ -559,12 +559,16 @@ module tsEdit {
                 if (s.isCollapsed) {
                     var range: Range = s.getRangeAt(0);
                     var p: DocumentPosition = self.makePosition(range.startContainer, range.startOffset);
-                    self.doc.selection = new TextRange(p, p);
+                    if (p) {
+                        self.doc.selection = new TextRange(p, p);
+                    }
                 } else {
                     var range: Range = s.getRangeAt(0);
                     var p1: DocumentPosition = self.makePosition(range.startContainer, range.startOffset);
                     var p2: DocumentPosition = self.makePosition(range.endContainer, range.endOffset);
-                    self.doc.selection = new TextRange(p1, p2);
+                    if (p1 && p2) {
+                        self.doc.selection = new TextRange(p1, p2);
+                    }
                 }
 
                 s.removeAllRanges();
@@ -770,7 +774,7 @@ module tsEdit {
             var findSelectable = (node: Node): HTMLElement => {
                 var current: Node = node;
                 while (!isSelectable(current)) {
-                    console.assert(current.parentNode ? true : false, "Parent node must exist.");
+                    if (current.parentNode === null) return null;
                     current = current.parentNode;
                 }
                 return <HTMLElement>current;
@@ -798,6 +802,8 @@ module tsEdit {
             };
 
             var startElement: HTMLElement = findSelectable(_container);
+            if (startElement === null) return null;
+
             var startGuid: Guid = new Guid(startElement.id);
 
             var startIndex: number = findIndex(_container, _offset, startElement);
