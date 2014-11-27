@@ -53,6 +53,7 @@ module tsEdit {
             this.parent = parent;
         }
         id: Guid = new Guid();
+        leaf: boolean = false;
         type: ContentType;
         contentSeries: ContentSeries;
         parent: ContentNode;
@@ -70,6 +71,42 @@ module tsEdit {
             console.assert(this.parent ? true : false, "Must have a parent");
             return this.parent.Document();
         }
+        nextLeaf(): ContentNode {
+            var parentIndex: number = this.parent.contentSeries.indexOf(this.id);
+            var node: ContentNode = this.parent;
+
+            while (!node.hasIndex(parentIndex + 1)) { // find uncle
+                if (node.parent === null) return null;
+
+                parentIndex = node.parent.contentSeries.indexOf(node.id);
+                node = node.parent;
+            }
+            node = node.getAtIndex(parentIndex + 1);
+
+            while (!node.leaf) { // find first leaf
+                node = node.getAtIndex(0);
+            }
+
+            return node;
+        }
+        prevLeaf(): ContentNode {
+            var parentIndex: number = this.parent.contentSeries.indexOf(this.id);
+            var node: ContentNode = this.parent;
+
+            while (!node.hasIndex(parentIndex - 1)) { // find prev uncle
+                if (node.parent === null) return null;
+
+                parentIndex = node.parent.contentSeries.indexOf(node.id);
+                node = node.parent;
+            }
+            node = node.getAtIndex(parentIndex - 1);
+
+            while (!node.leaf) { // find first leaf
+                node = node.getAtIndex(node.maxIndex());
+            }
+
+            return node;
+        }
 
     }
 
@@ -79,7 +116,9 @@ module tsEdit {
             super(null);
             this.contentSeries = new ContentSeries(this);
             this.contentStore = new ContentStore(this);
-            this.selection = new TextRange(new DocumentPosition(0, new DocumentPosition(0)), new DocumentPosition(0, new DocumentPosition(0)));
+            this.selection = new TextRange(
+                new DocumentPosition(0, this),
+                new DocumentPosition(0, this));
         }
         contentStore: ContentStore;
         selection: TextRange;
@@ -94,19 +133,6 @@ module tsEdit {
         }
         maxIndex(): number {
             return this.contentSeries.maxIndex();
-        }
-
-        locate(position: DocumentPosition): ContentNode {
-            var indices: number[] = position.getDomTraversal();
-            var current: ContentNode = this;
-            var index: number;
-            while ((index = indices.pop()) !== undefined) {
-                current = current.getAtIndex(index);
-
-                if (current === null || current === undefined)
-                    return undefined;
-            }
-            return current;
         }
 
         private finalize_shift(shift: boolean, pos: DocumentPosition): void {
@@ -149,15 +175,8 @@ module tsEdit {
                 this.shift_state = "r";
             }
 
-            var node = this.locate(pos);
-            if (node.hasIndex(pos.index + 1)) {
-                pos = pos.getNext();
-            } else {
-                pos = pos.getParent().getNext().getChild();
-                if (this.locate(pos) === undefined)
-                    return;
-            }
-            this.finalize_shift(shift, pos);
+            pos = pos.getNext();
+            if (pos) this.finalize_shift(shift, pos);
         }
 
         selectDown(shift: boolean) {
@@ -184,25 +203,16 @@ module tsEdit {
                 this.shift_state = "r";
             }
 
-            var charIndex = pos.index;
-            pos = pos.getParent();
-            var node = this.locate(pos);
-            if (node.parent.hasIndex(pos.index + 1)) {
-                pos = pos.getNext().getChild();
-                node = this.locate(pos);
-                if (node.hasIndex(charIndex))
-                    pos = new DocumentPosition(charIndex, pos.parent);
-                else
-                    pos = new DocumentPosition(node.maxIndex(), pos.parent);
+            var nextNode = pos.node.nextLeaf();
+
+            if (nextNode) {
+                pos = new DocumentPosition(nextNode.hasIndex(pos.index) ? pos.index : nextNode.maxIndex(), nextNode);
+            } else {
+                pos.index = pos.node.maxIndex();
             }
-            else {
-                pos = new DocumentPosition(0, pos);
-                node = this.locate(pos);
-                if (node === undefined)
-                    return;
-                pos = new DocumentPosition(node.maxIndex(), pos.parent);
-            }
+
             this.finalize_shift(shift, pos);
+
         }
 
         selectUp(shift: boolean) {
@@ -225,23 +235,12 @@ module tsEdit {
                 this.shift_state = "l";
             }
 
-            var charIndex = pos.index;
-            pos = pos.getParent();
-            var node = this.locate(pos);
+            var prevNode = pos.node.prevLeaf();
 
-            if (node.parent.hasIndex(pos.index - 1)) {
-                pos = pos.getPrevious().getChild();
-                node = this.locate(pos);
-                if (node.hasIndex(charIndex))
-                    pos = new DocumentPosition(charIndex, pos.parent);
-                else
-                    pos = new DocumentPosition(node.maxIndex(), pos.parent);
-            }
-            else {
-                pos = new DocumentPosition(0, pos);
-                node = this.locate(pos);
-                if (node === undefined)
-                    return;
+            if (prevNode) {
+                pos = new DocumentPosition(prevNode.hasIndex(pos.index) ? pos.index : prevNode.maxIndex(), prevNode);
+            } else {
+                pos.index = 0;
             }
 
             this.finalize_shift(shift, pos);
@@ -271,19 +270,8 @@ module tsEdit {
                 this.shift_state = "l";
             }
 
-            var node = this.locate(pos);
-            if (node.hasIndex(pos.index - 1)) {
-                pos = pos.getPrevious();
-            }
-            else {
-                pos = pos.getParent().getPrevious().getChild();
-                node = this.locate(pos);
-                if (node === undefined)
-                    return;
-                pos = new DocumentPosition(node.maxIndex(), pos.parent);
-            }
-
-            this.finalize_shift(shift, pos);
+            pos = pos.getPrevious();
+            if (pos) this.finalize_shift(shift, pos);
         }
 
     };
@@ -318,6 +306,7 @@ module tsEdit {
         private text: string;
         formatting: Formatting[] = [new Formatting()];
         type: ContentType = ContentType.PARAGRAPH;
+        leaf: boolean = true;
         contentSeries: ContentSeries = null;
         constructor(parent: ContentNode) {
             super(parent);
@@ -448,12 +437,13 @@ module tsEdit {
     //#region Document Interaction Representation
     export class DocumentPosition {
         index: number;
-        parent: DocumentPosition;
-        constructor(index: number, parent?: DocumentPosition) {
+        node: ContentNode;
+
+        constructor(index: number, node: ContentNode) {
             this.index = index;
-            this.parent = parent ? parent : null;
+            this.node = node;
         }
-        equals(other: DocumentPosition): boolean {
+        /*equals(other: DocumentPosition): boolean {
             if (other === undefined || other === null) return false;
             if (this.index !== other.index) return false;
 
@@ -464,36 +454,25 @@ module tsEdit {
             } else {
                 return (!other.parent);
             }
-        }
+        }*/
         toString(): string {
-            var text = this.index.pad(7);
-            if (this.parent) text = this.parent.toString() + ">" + text;
-            return text;
-        }
-        hasParent(): boolean {
-            return this.parent ? true : false;
-        }
-        getParent(): DocumentPosition {
-            console.assert(this.hasParent(), "Calling getParent on top level element");
-            return this.parent;
+            return "[" + this.node.id.toString() + ":" + this.index.pad(7) + "]";
         }
         getNext(): DocumentPosition {
-            return new DocumentPosition(this.index + 1, this.parent);
+            if (this.node.hasIndex(this.index + 1)) {
+                return new DocumentPosition(this.index + 1, this.node);
+            }
+            var node: ContentNode = this.node.nextLeaf();
+            return node ? new DocumentPosition(0, node) : null;
         }
         getPrevious(): DocumentPosition {
-            return new DocumentPosition(this.index - 1, this.parent);
+            if (this.node.hasIndex(this.index - 1)) {
+                return new DocumentPosition(this.index - 1, this.node);
+            }
+            var prevNode: ContentNode = this.node.prevLeaf();
+            return prevNode ? new DocumentPosition(prevNode.maxIndex(), prevNode) : null;
         }
-        getChild(): DocumentPosition {
-            return new DocumentPosition(0, this);
-        }
-        getDomTraversal(): number[] {
-            var order: number[] = [];
-            var at: DocumentPosition = this;
-            do {
-                order.push(at.index);
-            } while (at = at.parent);
-            return order;
-        }
+
     }
 
     export class TextRange {
@@ -504,7 +483,7 @@ module tsEdit {
             this.endPosition = endPosition ? endPosition : startPosition;
         }
         isCollapsed(): boolean {
-            return this.startPosition.equals(this.endPosition);
+            return this.startPosition.index === this.endPosition.index && this.startPosition.node.id.equals(this.endPosition.node.id);
         }
     }
 
@@ -532,7 +511,6 @@ module tsEdit {
 
     //#region Document Display
     class UpdateState {
-        currentPosition: DocumentPosition = new DocumentPosition(0);
         selectionOngoing: boolean = false;
     };
 
@@ -682,7 +660,6 @@ module tsEdit {
                     break;
                 default: throw "Invalid ContentNode Type";
             }
-            state.currentPosition = state.currentPosition.getNext();
             return e;
         }
 
@@ -694,13 +671,13 @@ module tsEdit {
             paragraphElement.className = "charSelectable";
             paragraphElement.id = paragraph.id.valueOf();
 
-            if (state.currentPosition.equals(this.doc.selection.startPosition.getParent())) {
+            if (paragraph.id.equals(this.doc.selection.startPosition.node.id)) {
                 this.renderText(paragraph, paragraphElement, 0, this.doc.selection.startPosition.index, false);
                 state.selectionOngoing = true;
                 i = this.doc.selection.startPosition.index;
             }
 
-            if (state.currentPosition.equals(this.doc.selection.endPosition.getParent())) {
+            if (paragraph.id.equals(this.doc.selection.endPosition.node.id)) {
                 this.renderText(paragraph, paragraphElement, i, this.doc.selection.endPosition.index, state.selectionOngoing);
                 state.selectionOngoing = false;
                 i = this.doc.selection.endPosition.index;
@@ -717,13 +694,9 @@ module tsEdit {
 
             var self = this;
 
-            state.currentPosition = state.currentPosition.getChild();
-
             table.contentSeries.forEach((contentNode: ContentNode): void => {
                 element.appendChild(self.generate(contentNode, state));
             });
-
-            state.currentPosition = state.currentPosition.getParent();
 
             return element;
         }
@@ -734,13 +707,9 @@ module tsEdit {
 
             var self = this;
 
-            state.currentPosition = state.currentPosition.getChild();
-
             row.contentSeries.forEach((contentNode: ContentNode): void => {
                 element.appendChild(self.generate(contentNode, state));
             });
-
-            state.currentPosition = state.currentPosition.getParent();
 
             return element;
         }
@@ -751,13 +720,9 @@ module tsEdit {
 
             var self = this;
 
-            state.currentPosition = state.currentPosition.getChild();
-
             cell.contentSeries.forEach((contentNode: ContentNode): void => {
                 element.appendChild(self.generate(contentNode, state));
             });
-
-            state.currentPosition = state.currentPosition.getParent();
 
             return element;
         }
@@ -767,13 +732,6 @@ module tsEdit {
         }
 
         private makePosition(_container: Node, _offset: number): DocumentPosition {
-
-            var nodePosition = (node: ContentNode): DocumentPosition => {
-                if (node.parent.type === ContentType.DOCUMENT) {
-                    return new DocumentPosition(node.parent.contentSeries.indexOf(node.id));
-                }
-                return new DocumentPosition(node.parent.contentSeries.indexOf(node.id), nodePosition(node.parent));
-            };
 
             var isSelectable = (node: Node): boolean => {
                 return (node.nodeType === Node.ELEMENT_NODE)
@@ -818,7 +776,7 @@ module tsEdit {
 
             return new DocumentPosition(
                 startIndex,
-                nodePosition(this.doc.contentStore.get(startGuid)));
+                this.doc.contentStore.get(startGuid));
 
         }
 
