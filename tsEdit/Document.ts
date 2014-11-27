@@ -20,6 +20,12 @@ module tsEdit {
         FORMAT
     }
 
+    enum ShiftState {
+        COLLAPSED,
+        MANIPULATE_START,
+        MANIPULATE_END,
+    }
+
     enum KeyboardKeys {
         Left = 37,
         Up = 38,
@@ -178,6 +184,7 @@ module tsEdit {
             super(null, ContentType.DOCUMENT);
             this.contentStore = new ContentStore(this);
             this.selection = null;
+            this.shift_state = ShiftState.COLLAPSED;
         }
         put(node: IContentNode): void {
             this.contentStore.put(node);
@@ -188,18 +195,22 @@ module tsEdit {
         private contentStore: ContentStore;
         selection: TextRange;
 
-        private shift_state: string;
+        private shift_state: ShiftState;
 
         private finalize_shift(shift: boolean, pos: DocumentPosition): void {
             if (shift) {
-                var l = this.selection.startPosition;
-                var r = this.selection.endPosition;
+                var start = this.selection.startPosition;
+                var end = this.selection.endPosition;
                 switch (this.shift_state) {
-                    case "l": l = pos; break;
-                    case "r": r = pos; break;
+                    case ShiftState.MANIPULATE_START: start = pos; break;
+                    case ShiftState.MANIPULATE_END: end = pos; break;
                     default: throw new Error("Unexpected shift_state " + this.shift_state);
                 }
-                this.selection = new TextRange(l, r);
+                if (end.before(start)) {
+                    this.selection = new TextRange(end, start);
+                } else {
+                    this.selection = new TextRange(start, end);
+                }
 
             } else {
                 this.selection = new TextRange(pos);
@@ -210,24 +221,24 @@ module tsEdit {
             var pos: DocumentPosition;
 
             if (this.selection.isCollapsed() === true) {
-                this.shift_state = "";
+                this.shift_state = ShiftState.COLLAPSED;
             }
-            if (this.shift_state === "l") {
+            if (this.shift_state === ShiftState.MANIPULATE_START) {
                 pos = this.selection.startPosition;
             } else {
                 pos = this.selection.endPosition;
             }
             if (shift === false) {
-                if (this.shift_state !== "") {
-                    this.shift_state = "";
+                if (this.shift_state !== ShiftState.COLLAPSED) {
+                    this.shift_state = ShiftState.COLLAPSED;
                 }
                 if (this.selection.isCollapsed() === false) {
                     this.selection = new TextRange(pos);
                     return;
                 }
             }
-            if (shift === true && this.shift_state === "") {
-                this.shift_state = "r";
+            if (shift === true && this.shift_state === ShiftState.COLLAPSED) {
+                this.shift_state = ShiftState.MANIPULATE_END;
             }
 
             pos = pos.getNext();
@@ -238,24 +249,24 @@ module tsEdit {
             var pos: DocumentPosition;
 
             if (this.selection.isCollapsed() === true) {
-                this.shift_state = "";
+                this.shift_state = ShiftState.COLLAPSED;
             }
-            if (this.shift_state === "l") {
+            if (this.shift_state === ShiftState.MANIPULATE_START) {
                 pos = this.selection.startPosition;
             } else {
                 pos = this.selection.endPosition;
             }
             if (shift === false) {
-                if (this.shift_state !== "") {
-                    this.shift_state = "";
+                if (this.shift_state !== ShiftState.COLLAPSED) {
+                    this.shift_state = ShiftState.COLLAPSED;
                 }
                 if (this.selection.isCollapsed() === false) {
                     this.selection = new TextRange(pos);
                     return;
                 }
             }
-            if (shift === true && this.shift_state === "") {
-                this.shift_state = "r";
+            if (shift === true && this.shift_state === ShiftState.COLLAPSED) {
+                this.shift_state = ShiftState.MANIPULATE_END;
             }
 
             var nextNode = pos.node.nextLeaf();
@@ -263,7 +274,7 @@ module tsEdit {
             if (nextNode) {
                 pos = new DocumentPosition(nextNode.hasIndex(pos.index) ? pos.index : nextNode.maxIndex(), nextNode);
             } else {
-                pos.index = pos.node.maxIndex();
+                pos = new DocumentPosition(pos.node.maxIndex(), pos.node);
             }
 
             this.finalize_shift(shift, pos);
@@ -273,21 +284,21 @@ module tsEdit {
         selectUp(shift: boolean) {
             var pos: DocumentPosition;
             if (this.selection.isCollapsed() === true) {
-                this.shift_state = "";
+                this.shift_state = ShiftState.COLLAPSED;
             }
 
-            if (this.shift_state === "l" || this.shift_state === "") {
+            if (this.shift_state === ShiftState.MANIPULATE_START || this.shift_state === ShiftState.COLLAPSED) {
                 pos = this.selection.startPosition;
             } else {
                 pos = this.selection.endPosition;
             }
             if (shift === false) {
-                if (this.shift_state !== "") {
-                    this.shift_state = "";
+                if (this.shift_state !== ShiftState.COLLAPSED) {
+                    this.shift_state = ShiftState.COLLAPSED;
                 }
             }
-            if (shift === true && this.shift_state === "") {
-                this.shift_state = "l";
+            if (shift === true && this.shift_state === ShiftState.COLLAPSED) {
+                this.shift_state = ShiftState.MANIPULATE_START;
             }
 
             var prevNode = pos.node.prevLeaf();
@@ -295,7 +306,7 @@ module tsEdit {
             if (prevNode) {
                 pos = new DocumentPosition(prevNode.hasIndex(pos.index) ? pos.index : prevNode.maxIndex(), prevNode);
             } else {
-                pos.index = 0;
+                pos = new DocumentPosition(0, pos.node);
             }
 
             this.finalize_shift(shift, pos);
@@ -304,25 +315,25 @@ module tsEdit {
         selectLeft(shift: boolean) {
             var pos: DocumentPosition;
             if (this.selection.isCollapsed() === true) {
-                this.shift_state = "";
+                this.shift_state = ShiftState.COLLAPSED;
             }
 
-            if (this.shift_state === "l" || this.shift_state === "") {
+            if (this.shift_state === ShiftState.MANIPULATE_START || this.shift_state === ShiftState.COLLAPSED) {
                 pos = this.selection.startPosition;
             } else {
                 pos = this.selection.endPosition;
             }
             if (shift === false) {
-                if (this.shift_state !== "") {
-                    this.shift_state = "";
+                if (this.shift_state !== ShiftState.COLLAPSED) {
+                    this.shift_state = ShiftState.COLLAPSED;
                 }
                 if (this.selection.isCollapsed() === false) {
                     this.selection = new TextRange(pos);
                     return;
                 }
             }
-            if (shift === true && this.shift_state === "") {
-                this.shift_state = "l";
+            if (shift === true && this.shift_state === ShiftState.COLLAPSED) {
+                this.shift_state = ShiftState.MANIPULATE_START;
             }
 
             pos = pos.getPrevious();
@@ -445,31 +456,51 @@ module tsEdit {
 
     //#region RootDocument Interaction Representation
     export class DocumentPosition {
-        index: number;
-        node: LeafNode;
+        private _index: number;
+        private _node: LeafNode;
 
         constructor(index: number, node: LeafNode) {
-            this.index = index;
-            this.node = node;
+            this._index = index;
+            this._node = node;
         }
         toString(): string {
-            return "[" + this.node.id.toString() + ":" + this.index.pad(7) + "]";
+            return "[" + this._node.id.toString() + ":" + this._index.pad(7) + "]";
         }
         getNext(): DocumentPosition {
-            if (this.node.hasIndex(this.index + 1)) {
-                return new DocumentPosition(this.index + 1, this.node);
+            if (this._node.hasIndex(this._index + 1)) {
+                return new DocumentPosition(this._index + 1, this._node);
             }
-            var node: LeafNode = this.node.nextLeaf();
+            var node: LeafNode = this._node.nextLeaf();
             return node ? new DocumentPosition(0, node) : null;
         }
         getPrevious(): DocumentPosition {
-            if (this.node.hasIndex(this.index - 1)) {
-                return new DocumentPosition(this.index - 1, this.node);
+            if (this._node.hasIndex(this._index - 1)) {
+                return new DocumentPosition(this._index - 1, this._node);
             }
-            var prevNode: LeafNode = this.node.prevLeaf();
+            var prevNode: LeafNode = this._node.prevLeaf();
             return prevNode ? new DocumentPosition(prevNode.maxIndex(), prevNode) : null;
         }
-
+        equals(other: DocumentPosition): boolean {
+            return this._index === other._index && this._node.id.equals(other._node.id);
+        }
+        before(other: DocumentPosition): boolean {
+            if (this._node.id.equals(other._node.id)) {
+                return this._index < other._index;
+            }
+            var next: LeafNode = this._node;
+            while (next = next.nextLeaf()) {
+                if (next.id.equals(other._node.id)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        get index(): number {
+            return this._index;
+        }
+        get node(): LeafNode {
+            return this._node;
+        }
     }
 
     export class TextRange {
@@ -480,7 +511,7 @@ module tsEdit {
             this.endPosition = endPosition ? endPosition : startPosition;
         }
         isCollapsed(): boolean {
-            return this.startPosition.index === this.endPosition.index && this.startPosition.node.id.equals(this.endPosition.node.id);
+            return this.startPosition.equals(this.endPosition);
         }
     }
 
