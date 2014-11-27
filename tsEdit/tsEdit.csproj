@@ -53,6 +53,7 @@
   </PropertyGroup>
   <ItemGroup>
     <TypeScriptCompile Include="Document.ts" />
+    <TypeScriptCompile Include="Functional.ts" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="demo.html" />

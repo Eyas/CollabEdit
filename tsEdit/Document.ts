@@ -1,10 +1,8 @@
-interface Number {
-    pad(size: number): string;
-}
-
-Number.prototype.pad = function (size: number): string { return ('000000000' + this.toString()).substr(-size); };
-
 module tsEdit {
+
+    export interface Maybe<T> extends Functional.Maybe<T> { }
+    export class Some<T> extends Functional.Some<T> { }
+    export class Nothing<T> extends Functional.Nothing<T> { }
 
     export enum ContentType {
         DOCUMENT,
@@ -60,13 +58,15 @@ module tsEdit {
         id: Guid;
         leaf: boolean;
         type: ContentType;
-        parent: IContainingNode;
+        parent: Maybe<IContainingNode>;
         hasIndex(index: number): boolean;
         maxIndex(): number;
+        firstLeaf(): Maybe<LeafNode>;
+        lastLeaf(): Maybe<LeafNode>;
     }
 
     export interface IContainingNode extends IContentNode {
-        getAtIndex(index: number): IContentNode;
+        getAtIndex(index: number): Maybe<IContentNode>;
         indexOf(node: IContentNode): number;
         getRoot(): RootDocument;
         forEach(fn: (v: IContentNode) => void): void;
@@ -76,13 +76,13 @@ module tsEdit {
         id: Guid;
         leaf: boolean;
         type: ContentType;
-        parent: IContainingNode;
+        parent: Maybe<IContainingNode>;
 
         constructor(parent: IContainingNode, type: ContentType) {
             this.id = new Guid();
             this.leaf = true;
             this.type = type;
-            this.parent = parent;
+            this.parent = new Some(parent);
         }
 
         hasIndex(index: number): boolean {
@@ -91,42 +91,38 @@ module tsEdit {
         maxIndex(): number {
             throw new Error("NotImplementedException: ContentNode.hasIndex");
         }
-
-        nextLeaf(): LeafNode {
-            var parentIndex: number = this.parent.indexOf(this);
-            var node: IContentNode = this.parent;
+        firstLeaf(): Maybe<LeafNode> {
+            return new Some(this);
+        }
+        lastLeaf(): Maybe<LeafNode> {
+            return new Some(this);
+        }
+        nextLeaf(): Maybe<LeafNode> {
+            var parentIndex: number = this.parent.value().indexOf(this);
+            var node: IContentNode = this.parent.value();
 
             while (!node.hasIndex(parentIndex + 1)) { // find uncle
-                if (node.parent === null) return null;
+                if (node.parent.hasValue === false) return new Nothing<LeafNode>();
 
-                parentIndex = node.parent.indexOf(node);
-                node = node.parent;
+                parentIndex = node.parent.value().indexOf(node);
+                node = node.parent.value();
             }
-            node = (<IContainingNode>node).getAtIndex(parentIndex + 1);
+            // can call .value() immediately since the loop verifies that the value exists
+            return (<IContainingNode>node).getAtIndex(parentIndex + 1).value().firstLeaf();
 
-            while (!node.leaf) { // find first leaf
-                node = (<IContainingNode>node).getAtIndex(0);
-            }
-
-            return <LeafNode>node;
         }
-        prevLeaf(): LeafNode {
-            var parentIndex: number = this.parent.indexOf(this);
-            var node: IContentNode = this.parent;
+        prevLeaf(): Maybe<LeafNode> {
+            var parentIndex: number = this.parent.value().indexOf(this);
+            var node: IContentNode = this.parent.value();
 
             while (!node.hasIndex(parentIndex - 1)) { // find prev uncle
-                if (node.parent === null) return null;
+                if (node.parent.hasValue === false) return new Nothing<LeafNode>();
 
-                parentIndex = node.parent.indexOf(node);
-                node = node.parent;
+                parentIndex = node.parent.value().indexOf(node);
+                node = node.parent.value();
             }
-            node = (<IContainingNode>node).getAtIndex(parentIndex - 1);
+            return (<IContainingNode>node).getAtIndex(parentIndex - 1).value().lastLeaf();
 
-            while (!node.leaf) { // find first leaf
-                node = (<IContainingNode>node).getAtIndex(node.maxIndex());
-            }
-
-            return <LeafNode>node;
         }
 
     }
@@ -137,9 +133,9 @@ module tsEdit {
         id: Guid;
         leaf: boolean;
         type: ContentType;
-        parent: IContainingNode;
+        parent: Maybe<IContainingNode>;
 
-        constructor(parent: IContainingNode, type: ContentType) {
+        constructor(parent: Maybe<IContainingNode>, type: ContentType) {
             this.id = new Guid();
             this.leaf = false;
             this.type = type;
@@ -148,12 +144,13 @@ module tsEdit {
             this.contentSeries = new ContentSeries(this.getRoot());
         }
 
-        getRoot() {
+        getRoot(): RootDocument {
             if (this.type === ContentType.DOCUMENT) return <RootDocument>this;
-            return this.parent.getRoot();
+            if (this.parent.hasValue === false) throw new Error("Node is at root but is not a DOCUMENT.");
+            return this.parent.value().getRoot();
         }
 
-        getAtIndex(index: number): IContentNode {
+        getAtIndex(index: number): Maybe<IContentNode> {
             return this.contentSeries.getNode(index);
         }
         indexOf(node: IContentNode): number {
@@ -168,20 +165,18 @@ module tsEdit {
         forEach(fn: (v: IContentNode) => void): void {
             this.contentSeries.forEach(fn);
         }
-
-        begin(): DocumentPosition {
-            var node: IContentNode = this.getAtIndex(0);
-            do {
-                if (node === null) return null;
-                if (node.leaf) return new DocumentPosition(0, <LeafNode>node);
-                node = (<IContainingNode>node).getAtIndex(0);
-            } while (true);
+        firstLeaf(): Maybe<LeafNode> {
+            return this.getAtIndex(0).mapRecurse((node) => { return node.firstLeaf(); });
         }
+        lastLeaf(): Maybe<LeafNode> {
+            return this.getAtIndex(this.maxIndex()).mapRecurse((node) => { return node.lastLeaf(); });
+        }
+
     }
 
     export class RootDocument extends ContainingNode {
         constructor() {
-            super(null, ContentType.DOCUMENT);
+            super(new Nothing<ContainingNode>(), ContentType.DOCUMENT);
             this.contentStore = new ContentStore(this);
             this.selection = null;
             this.shift_state = ShiftState.COLLAPSED;
@@ -204,10 +199,14 @@ module tsEdit {
                 switch (this.shift_state) {
                     case ShiftState.MANIPULATE_START: start = pos; break;
                     case ShiftState.MANIPULATE_END: end = pos; break;
-                    default: throw new Error("Unexpected shift_state " + this.shift_state);
+                    default: throw new Error("Unexpected shift_state " + this.shift_state.toString());
                 }
                 if (end.before(start)) {
                     this.selection = new TextRange(end, start);
+                    switch (this.shift_state) {
+                        case ShiftState.MANIPULATE_START: this.shift_state = ShiftState.MANIPULATE_END; break;
+                        case ShiftState.MANIPULATE_END: this.shift_state = ShiftState.MANIPULATE_START; break;
+                    }
                 } else {
                     this.selection = new TextRange(start, end);
                 }
@@ -241,8 +240,8 @@ module tsEdit {
                 this.shift_state = ShiftState.MANIPULATE_END;
             }
 
-            pos = pos.getNext();
-            if (pos) this.finalize_shift(shift, pos);
+            var next: Maybe<DocumentPosition> = pos.getNext();
+            if (next.hasValue) this.finalize_shift(shift, next.value());
         }
 
         selectDown(shift: boolean) {
@@ -269,10 +268,11 @@ module tsEdit {
                 this.shift_state = ShiftState.MANIPULATE_END;
             }
 
-            var nextNode = pos.node.nextLeaf();
+            var nextNode: Maybe<LeafNode> = pos.node.nextLeaf();
 
-            if (nextNode) {
-                pos = new DocumentPosition(nextNode.hasIndex(pos.index) ? pos.index : nextNode.maxIndex(), nextNode);
+            if (nextNode.hasValue) {
+                var n: LeafNode = nextNode.value();
+                pos = new DocumentPosition(n.hasIndex(pos.index) ? pos.index : n.maxIndex(), n);
             } else {
                 pos = new DocumentPosition(pos.node.maxIndex(), pos.node);
             }
@@ -303,8 +303,9 @@ module tsEdit {
 
             var prevNode = pos.node.prevLeaf();
 
-            if (prevNode) {
-                pos = new DocumentPosition(prevNode.hasIndex(pos.index) ? pos.index : prevNode.maxIndex(), prevNode);
+            if (prevNode.hasValue) {
+                var n: LeafNode = prevNode.value();
+                pos = new DocumentPosition(n.hasIndex(pos.index) ? pos.index : n.maxIndex(), n);
             } else {
                 pos = new DocumentPosition(0, pos.node);
             }
@@ -336,8 +337,8 @@ module tsEdit {
                 this.shift_state = ShiftState.MANIPULATE_START;
             }
 
-            pos = pos.getPrevious();
-            if (pos) this.finalize_shift(shift, pos);
+            var next: Maybe<DocumentPosition> = pos.getPrevious();
+            if (next.hasValue) this.finalize_shift(shift, next.value());
         }
 
     };
@@ -349,7 +350,10 @@ module tsEdit {
         constructor(root: RootDocument) {
             this.root = root;
         }
-        getNode(index: number): IContentNode { return this.contentNodes[index]; }
+        getNode(index: number): Maybe<IContentNode> {
+            var result = this.contentNodes[index];
+            return result ? new Some(result) : new Nothing<IContentNode>();
+        }
         hasIndex(index: number): boolean { return (this.contentNodes[index]) ? true : false; }
         maxIndex(): number { return this.contentNodes.length - 1; }
         forEach(fn: (v: IContentNode) => void): void {
@@ -415,19 +419,19 @@ module tsEdit {
 
     export class Table extends ContainingNode {
         constructor(parent: ContainingNode) {
-            super(parent, ContentType.TABLE);
+            super(new Some(parent), ContentType.TABLE);
         }
     };
 
     export class TableRow extends ContainingNode {
         constructor(parent: Table) {
-            super(parent, ContentType.TABLE_ROW);
+            super(new Some(parent), ContentType.TABLE_ROW);
         }
     };
 
     export class TableCell extends ContainingNode {
         constructor(parent: TableRow) {
-            super(parent, ContentType.TABLE_CELL);
+            super(new Some(parent), ContentType.TABLE_CELL);
         }
     };
 
@@ -464,21 +468,24 @@ module tsEdit {
             this._node = node;
         }
         toString(): string {
-            return "[" + this._node.id.toString() + ":" + this._index.pad(7) + "]";
+            return "[" + this._node.id.toString() + ":" + this._index + "]";
         }
-        getNext(): DocumentPosition {
+        getNext(): Maybe<DocumentPosition> {
             if (this._node.hasIndex(this._index + 1)) {
-                return new DocumentPosition(this._index + 1, this._node);
+                return new Some(new DocumentPosition(this._index + 1, this._node));
             }
-            var node: LeafNode = this._node.nextLeaf();
-            return node ? new DocumentPosition(0, node) : null;
+            return this._node.nextLeaf().map((n: LeafNode): DocumentPosition => {
+                return new DocumentPosition(0, n);
+            });
+
         }
-        getPrevious(): DocumentPosition {
+        getPrevious(): Maybe<DocumentPosition> {
             if (this._node.hasIndex(this._index - 1)) {
-                return new DocumentPosition(this._index - 1, this._node);
+                return new Some(new DocumentPosition(this._index - 1, this._node));
             }
-            var prevNode: LeafNode = this._node.prevLeaf();
-            return prevNode ? new DocumentPosition(prevNode.maxIndex(), prevNode) : null;
+            return this._node.nextLeaf().map((n: LeafNode): DocumentPosition => {
+                return new DocumentPosition(n.maxIndex(), n);
+            });
         }
         equals(other: DocumentPosition): boolean {
             return this._index === other._index && this._node.id.equals(other._node.id);
@@ -487,11 +494,12 @@ module tsEdit {
             if (this._node.id.equals(other._node.id)) {
                 return this._index < other._index;
             }
-            var next: LeafNode = this._node;
-            while (next = next.nextLeaf()) {
-                if (next.id.equals(other._node.id)) {
+            var next: Maybe<LeafNode> = new Some<LeafNode>(this._node);
+            while (next.hasValue) {
+                if (next.value().id.equals(other._node.id)) {
                     return true;
                 }
+                next = next.value().nextLeaf();
             }
             return false;
         }
@@ -600,7 +608,11 @@ module tsEdit {
             while (this.element.hasChildNodes()) {
                 this.element.removeChild(this.element.lastChild);
             }
-            if (this.doc.selection === null) this.doc.selection = new TextRange(this.doc.begin(), this.doc.begin());
+            if (this.doc.selection === null) {
+                var firstLeaf = this.doc.firstLeaf().value();
+                var begin = new DocumentPosition(0, firstLeaf);
+                this.doc.selection = new TextRange(begin, begin);
+            }
             var state: UpdateState = new UpdateState();
             var self = this;
 
