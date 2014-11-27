@@ -30,14 +30,16 @@ module tsEdit {
 
     export class Guid {
         constructor(guidString?: string) {
-            function s4() {
-                return Math.floor((1 + Math.random()) * 0x10000)
-                    .toString(16)
-                    .substring(1);
-            };
+            if (guidString) {
+                this.guid = guidString;
+                return;
+            }
 
-            this.guid = (guidString) ? guidString : s4() + s4() + '-' + s4() + '-' + s4()
-            + '-' + s4() + '-' + s4() + s4() + s4();
+            // guid v4 compliant code thanks to broofa @ StackOverflow
+            this.guid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
 
         }
         toString(): string { return this.guid; }
@@ -78,10 +80,10 @@ module tsEdit {
         }
 
         hasIndex(index: number): boolean {
-            throw "NotImplementedException: ContentNode.hasIndex";
+            throw new Error("NotImplementedException: ContentNode.hasIndex");
         }
         maxIndex(): number {
-            throw "NotImplementedException: ContentNode.hasIndex";
+            throw new Error("NotImplementedException: ContentNode.hasIndex");
         }
 
         nextLeaf(): LeafNode {
@@ -177,7 +179,13 @@ module tsEdit {
             this.contentStore = new ContentStore(this);
             this.selection = null;
         }
-        contentStore: ContentStore;
+        put(node: IContentNode): void {
+            this.contentStore.put(node);
+        }
+        get(guid: Guid): IContentNode {
+            return this.contentStore.get(guid);
+        }
+        private contentStore: ContentStore;
         selection: TextRange;
 
         private shift_state: string;
@@ -189,7 +197,7 @@ module tsEdit {
                 switch (this.shift_state) {
                     case "l": l = pos; break;
                     case "r": r = pos; break;
-                    default: throw "Unexpected shift_state " + this.shift_state;
+                    default: throw new Error("Unexpected shift_state " + this.shift_state);
                 }
                 this.selection = new TextRange(l, r);
 
@@ -325,10 +333,10 @@ module tsEdit {
 
     class ContentSeries {
         contentNodes: IContentNode[] = [];
-        doc: RootDocument;
+        root: RootDocument;
 
-        constructor(doc: RootDocument) {
-            this.doc = doc;
+        constructor(root: RootDocument) {
+            this.root = root;
         }
         getNode(index: number): IContentNode { return this.contentNodes[index]; }
         hasIndex(index: number): boolean { return (this.contentNodes[index]) ? true : false; }
@@ -338,7 +346,7 @@ module tsEdit {
         }
         push(node: IContentNode): void {
             this.contentNodes.push(node);
-            this.doc.contentStore.put(node);
+            this.root.put(node);
         }
         indexOf(guid: Guid): number {
             return this.contentNodes.map(function (node, index) {
@@ -417,7 +425,7 @@ module tsEdit {
     //#endregion
 
     //#region Content Access
-    export class ContentStore {
+    class ContentStore {
         private contentNodes: { [guid: string]: IContentNode } = {};
         private doc: RootDocument;
 
@@ -647,7 +655,7 @@ module tsEdit {
                 case ContentType.IMAGE:
                     e = this.generateImage(<Image>contentNode, state);
                     break;
-                default: throw "Invalid ContentNode Type";
+                default: throw new Error("Invalid ContentNode Type");
             }
             return e;
         }
@@ -746,8 +754,8 @@ module tsEdit {
                 var current: Node = container;
                 var parent: Node = container.parentNode;
                 var acc: number = 0;
-
-                        do {
+                
+                do {
                     while (current = current.previousSibling) {
                         acc += current.textContent.length;
                     }
@@ -765,7 +773,7 @@ module tsEdit {
 
             return new DocumentPosition(
                 startIndex,
-                <LeafNode>this.doc.contentStore.get(startGuid));
+                <LeafNode>this.doc.get(startGuid));
 
         }
 
