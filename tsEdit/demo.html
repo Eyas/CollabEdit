@@ -17,17 +17,39 @@
 
         var doc = new tsEdit.Document();
 
+        var f1 = new tsEdit.Formatting();
+        f1.bold = true;
+        f1.underline = true;
+
+        var f2 = f1.clone();
+        f2.color = "red";
+
+        var f3 = new tsEdit.Formatting();
+        f3.highlight = "green";
+
         var p1 = new tsEdit.Paragraph(doc);
         p1.setText("First paragraph");
-        p1.formatting[0].length = p1.getText().length;
+        p1.formatting.push(f1.clone());
+
+        p1.formatting[0].length = p1.getText().length - 10;
+        p1.formatting[1].length = 10;
 
         var p2 = new tsEdit.Paragraph(doc);
         p2.setText("Second paragraph");
-        p2.formatting[0].length = p2.getText().length;
+
+        p2.formatting.push(f2.clone());
+        p2.formatting.push(f3.clone());
+        p2.formatting.push(p2.formatting[0].clone());
+
+        p2.formatting[0].length = p2.getText().length - 10;
+        p2.formatting[1].length = 3;
+        p2.formatting[2].length = 2;
+        p2.formatting[3].length = 5;
 
         var p3 = new tsEdit.Paragraph(doc);
         p3.setText("Third paragraph");
-        p3.formatting[0].length = p3.getText().length;
+        p3.formatting.push(f1.clone());
+        p3.formatting[1].length = p3.getText().length;
 
         p1.validate();
         p2.validate();

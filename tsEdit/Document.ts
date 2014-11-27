@@ -610,7 +610,7 @@ module tsEdit {
                         end = currentIndex + formatRemaining;
                     }
 
-                    span.textContent = paragraph.getText().substring(startIndex, end);
+                    span.textContent = paragraph.getText().substring(currentIndex, end);
                     container.appendChild(span);
 
                     ++formatIndex;
