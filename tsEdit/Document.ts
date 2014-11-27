@@ -1,3 +1,11 @@
+interface String {
+    replaceRange(start: number, end: number, replace: string): string;
+}
+
+String.prototype.replaceRange = function (start: number, end: number, replace: string): string {
+    return this.slice(0, start) + replace + this.slice(end, this.length);
+};
+
 module tsEdit {
 
     export interface Maybe<T> extends Functional.Maybe<T> { }
@@ -24,12 +32,22 @@ module tsEdit {
         MANIPULATE_END,
     }
 
-    enum KeyboardKeys {
+    enum LegacyKeys {
         Left = 37,
         Up = 38,
         Right = 39,
         Down = 40,
         Backspace = 8,
+        Delete = 46
+    }
+
+    var Keys = {
+        Left: "Left",
+        Up: "Up",
+        Right: "Right",
+        Down: "Down",
+        Backspace: "Backspace",
+        Delete: "Delete"
     }
 
     export class Guid {
@@ -89,7 +107,7 @@ module tsEdit {
             throw new Error("NotImplementedException: ContentNode.hasIndex");
         }
         maxIndex(): number {
-            throw new Error("NotImplementedException: ContentNode.hasIndex");
+            throw new Error("NotImplementedException: ContentNode.maxIndex");
         }
         firstLeaf(): Maybe<LeafNode> {
             return new Some(this);
@@ -341,6 +359,27 @@ module tsEdit {
             if (next.hasValue) this.finalize_shift(shift, next.value());
         }
 
+        applyChange(change: ReplaceArgs) {
+            var range = change.selection;
+            var node: LeafNode;
+            var paragraph: Paragraph;
+            if (range.startPosition.node.id.equals(range.endPosition.node.id)) {
+                node = range.startPosition.node;
+                if (node.type == ContentType.PARAGRAPH) {
+                    paragraph = <Paragraph>node;
+                    paragraph.replaceRange(range.startPosition.index, range.endPosition.index, change.text);
+
+                    // TODO: not exactly accurate
+                    var newPos = new DocumentPosition(range.startPosition.index + change.text.length, range.startPosition.node);
+                    this.selection = new TextRange(newPos, newPos);
+
+                } else {
+                    throw new Error("Don't know how to do this for " + node.type.toString());
+                }
+            } else {
+                throw Error("TODO: not yet implemented");
+            }
+        }
     };
 
     class ContentSeries {
@@ -391,6 +430,61 @@ module tsEdit {
         }
         maxIndex(): number {
             return this.text.length;
+        }
+        replaceRange(start: number, end: number, replace: string) {
+            var removed_length = end - start;
+            var inserted_length = replace.length;
+
+            var startFormatIndex = this.findFormatIndex(start);
+            var endFormatIndex = this.findFormatIndex(end);
+
+            if (startFormatIndex === endFormatIndex) {
+                if (startFormatIndex < this.formatting.length) {
+                    this.formatting[startFormatIndex].length += inserted_length - removed_length;
+                } else {
+                    this.formatting[this.formatting.length - 1].length += inserted_length - removed_length;
+                }
+            } else {
+
+                var startFormatCharCount = this.findFormatStart(startFormatIndex);
+                var endFormatCharCount = this.findFormatStart(endFormatIndex);
+                if (endFormatIndex < this.formatting.length) {
+                    this.formatting[endFormatIndex].length -= end - endFormatCharCount;
+                }
+                this.formatting[startFormatIndex].length = (start - startFormatCharCount) + inserted_length;
+
+                this.formatting.splice(startFormatIndex + 1, endFormatIndex - (startFormatIndex + 1));
+
+            }
+
+            this.text = this.text.replaceRange(start, end, replace);
+            this.validate();
+
+        }
+        findFormatIndex(charIndex: number): number {
+            var formatIndex: number = 0; /// index into format array
+            var currentIndex: number = 0; /// index into paragraph
+
+            for (; formatIndex < this.formatting.length; ++formatIndex) {
+                if (currentIndex + this.formatting[formatIndex].length > charIndex) {
+                    currentIndex = charIndex;
+                    break;
+                }
+                currentIndex += this.formatting[formatIndex].length;
+            }
+            return formatIndex;
+        }
+        findFormatStart(formatIndex: number): number {
+            return this.formatting.filter((fmt, idx) => {
+                return idx < formatIndex;
+            }).map((fmt) => {
+                return fmt.length;
+            }).reduce((l1, l2) => {
+                return l1 + l2;
+            }, 0);
+        }
+        findFormat(charIndex: number): Formatting {
+            return this.formatting[this.findFormatIndex(charIndex)];
         }
     };
 
@@ -483,7 +577,7 @@ module tsEdit {
             if (this._node.hasIndex(this._index - 1)) {
                 return new Some(new DocumentPosition(this._index - 1, this._node));
             }
-            return this._node.nextLeaf().map((n: LeafNode): DocumentPosition => {
+            return this._node.prevLeaf().map((n: LeafNode): DocumentPosition => {
                 return new DocumentPosition(n.maxIndex(), n);
             });
         }
@@ -526,7 +620,7 @@ module tsEdit {
     //#endregion
 
     //#region RootDocument Interaction Manipulation
-    class ReplaceArgs {
+    export class ReplaceArgs {
         selection: TextRange;
         text: string;
         constructor(selection: TextRange, text: string) {
@@ -535,7 +629,7 @@ module tsEdit {
         }
     };
 
-    class FormatArgs {
+    export class FormatArgs {
         selection: TextRange;
         formatting: Formatting;
         constructor(selection: TextRange, formatting: Formatting) {
@@ -583,24 +677,70 @@ module tsEdit {
                 self.Update();
             });
 
+            document.addEventListener("keypress", function (event) {
+                var key: string;
+                if (event.key) {
+                    key = event.key;
+                } else if (event.which) {
+                    key = String.fromCharCode(event.which);
+                } else {
+                    console.error("Cannot read keys.");
+                    return;
+                }
+
+                var change: ReplaceArgs = new ReplaceArgs(self.doc.selection, key);
+                self.doc.applyChange(change);
+                self.Update();
+            });
+
             document.addEventListener("keydown", function (event) {
-                switch (event.which) {
-                    case KeyboardKeys.Right:
-                        self.doc.selectRight(event.shiftKey);
-                        break;
-                    case KeyboardKeys.Left:
-                        self.doc.selectLeft(event.shiftKey);
-                        break;
-                    case KeyboardKeys.Up:
-                        self.doc.selectUp(event.shiftKey);
-                        break;
-                    case KeyboardKeys.Down:
-                        self.doc.selectDown(event.shiftKey);
-                        break;
+                var handled = true;
+                if (event.key) {
+                    switch (event.key) {
+                        case Keys.Right:
+                            self.doc.selectRight(event.shiftKey);
+                            break;
+                        case Keys.Left:
+                            self.doc.selectLeft(event.shiftKey);
+                            break;
+                        case Keys.Up:
+                            self.doc.selectUp(event.shiftKey);
+                            break;
+                        case Keys.Down:
+                            self.doc.selectDown(event.shiftKey);
+                            break;
+                        case Keys.Delete:
+                        case Keys.Backspace:
+                            var change: ReplaceArgs = new ReplaceArgs(self.doc.selection, "");
+                            self.doc.applyChange(change);
+                            break;
+                        default: handled = false;
+                    }
+                } else if (event.which) {
+                    switch (event.which) {
+                        case LegacyKeys.Right:
+                            self.doc.selectRight(event.shiftKey);
+                            break;
+                        case LegacyKeys.Left:
+                            self.doc.selectLeft(event.shiftKey);
+                            break;
+                        case LegacyKeys.Up:
+                            self.doc.selectUp(event.shiftKey);
+                            break;
+                        case LegacyKeys.Down:
+                            self.doc.selectDown(event.shiftKey);
+                            break;
+                        case LegacyKeys.Backspace:
+                        case LegacyKeys.Delete:
+                            var change: ReplaceArgs = new ReplaceArgs(self.doc.selection, "");
+                            self.doc.applyChange(change);
+                            break;
+                        default: handled = false;
+                    }
                 }
 
                 self.Update();
-                event.preventDefault();
+                if (handled) event.preventDefault();
             });
         }
 
@@ -634,9 +774,14 @@ module tsEdit {
 
         private renderText(paragraph: Paragraph, container: HTMLElement, startIndex: number, endIndex: number, selected: boolean): void {
             if (startIndex === endIndex) {
+                var span: HTMLSpanElement = document.createElement("span");
                 if (selected) {
-                    var span: HTMLSpanElement = document.createElement("span");
                     span.className = "selected";
+                }
+                if (paragraph.getText() === "") {
+                    span.innerHTML = "&nbsp;";
+                }
+                if (selected || paragraph.getText() === "") {
                     container.appendChild(span);
                 }
                 return;
