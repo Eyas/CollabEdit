@@ -323,7 +323,7 @@ module tsEdit {
 
     };
 
-    export class ContentSeries {
+    class ContentSeries {
         contentNodes: IContentNode[] = [];
         doc: RootDocument;
 
@@ -353,7 +353,6 @@ module tsEdit {
         private text: string;
         formatting: Formatting[] = [new Formatting()];
 
-        contentSeries: ContentSeries = null;
         constructor(parent: ContainingNode) {
             super(parent, ContentType.PARAGRAPH);
         }
