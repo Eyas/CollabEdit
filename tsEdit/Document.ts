@@ -1,13 +1,3 @@
-//#region VSDOC References
-/// <reference path="./Scripts/typings/jquery/jquery.d.ts" />
-/// <reference path="./Scripts/typings/rangy/rangy-core.d.ts" />
-/// <reference path="./Scripts/typings/rangy/rangy-classapplier.d.ts" />
-//#endregion
-
-interface Window {
-    rangy: Rangy;
-}
-
 interface Number {
     pad(size: number): string;
 }
@@ -36,8 +26,6 @@ module tsEdit {
         Backspace = 8,
     }
 
-    var selectionApplier: ClassApplier;
-
     export class Guid {
         constructor(guidString?: string) {
             function s4() {
@@ -57,7 +45,6 @@ module tsEdit {
         }
         private guid: string;
     }
-
 
     export class ContentNode {
         constructor(parent: ContentNode) {
@@ -80,9 +67,9 @@ module tsEdit {
     }
 
     export class Document extends ContentNode {
+        type: ContentType = ContentType.DOCUMENT;
         constructor() {
             super(null);
-            this.type = ContentType.DOCUMENT;
             this.contentSeries = new ContentSeries(this);
             this.contentStore = new ContentStore(this);
             this.selection = new TextRange(new DocumentPosition(0, new DocumentPosition(0)), new DocumentPosition(0, new DocumentPosition(0)));
@@ -323,10 +310,10 @@ module tsEdit {
     export class Paragraph extends ContentNode {
         private text: string;
         formatting: Formatting[] = [new Formatting()];
-
+        type: ContentType = ContentType.PARAGRAPH;
+        contentSeries: ContentSeries = null;
         constructor(parent: ContentNode) {
             super(parent);
-            this.type = ContentType.PARAGRAPH;
         }
         setText(text: string): void { this.text = text; }
         getText(): string { return this.text; }
@@ -354,7 +341,7 @@ module tsEdit {
         size: string = "1.0em";
         color: string = "black";
         highlight: string = "transparent";
-        pos: string = "normal"; // sub, sup, normal
+        pos: string = "baseline"; // sub, super, baseline
         length: number = 0;
 
         clone(): Formatting {
@@ -493,60 +480,41 @@ module tsEdit {
     //#endregion
 
     //#region Document Display
-    export class UpdateState {
+    class UpdateState {
         currentPosition: DocumentPosition = new DocumentPosition(0);
         selectionOngoing: boolean = false;
     };
 
     export class Display {
-        private element: JQuery;
+        private element: HTMLElement;
         private html: string = "";
         private doc: Document;
 
         constructor(id: string, doc: Document) {
             var self = this;
             self.doc = doc;
-            self.element = $("#" + id);
 
-            self.element.on("mouseup", function () {
+            self.element = document.getElementById(id);
+
+            self.element.addEventListener("mouseup", function () {
 
                 var s: Selection = window.getSelection();
                 if (s.isCollapsed) {
                     var range: Range = s.getRangeAt(0);
-                    var container: Node = range.startContainer;
-                    var parent: Node = container.parentNode;
-
-                    // make sure container is a text node
-                    if (container.nodeType != Node.TEXT_NODE) {
-                        parent = container;
-                        container = container.childNodes[1];
-                    }
-
-                    var replacement = (<Text>container).splitText(range.startOffset);
-                    var selector = $("<span>").addClass("snew")[0];
-                    parent.insertBefore(selector, replacement);
-
+                    var p: DocumentPosition = self.makePosition(range.startContainer, range.startOffset);
+                    self.doc.selection = new TextRange(p, p);
                 } else {
-                    selectionApplier.applyToSelection();
+                    var range: Range = s.getRangeAt(0);
+                    var p1: DocumentPosition = self.makePosition(range.startContainer, range.startOffset);
+                    var p2: DocumentPosition = self.makePosition(range.endContainer, range.endOffset);
+                    self.doc.selection = new TextRange(p1, p2);
                 }
 
-                $(".selected").contents().unwrap();
-                $(".selected").remove();
-                $(".snew").removeClass("snew").addClass("selected");
-
                 s.removeAllRanges();
-
-                var selFirst = $(".selected").first();
-                var selLast = $(".selected").last();
-
-                var p1: DocumentPosition = self.getPos(selFirst, false);
-                var p2: DocumentPosition = self.getPos(selLast, true);
-
-                self.doc.selection = new TextRange(p1, p2);
                 self.Update();
             });
 
-            $(document).keydown(function (event) {
+            document.addEventListener("keydown", function (event) {
                 switch (event.which) {
                     case KeyboardKeys.Right:
                         self.doc.selectRight(event.shiftKey);
@@ -568,7 +536,10 @@ module tsEdit {
         }
 
         Update(): void {
-            this.element.empty();
+            while (this.element.hasChildNodes()) {
+                this.element.removeChild(this.element.lastChild);
+            }
+
             var iterator: ContentIterator = this.doc.contentSeries.getIterator();
 
             var state: UpdateState = new UpdateState();
@@ -577,50 +548,103 @@ module tsEdit {
             while ((contentNode = iterator.nextNode()) !== undefined) {
                 switch (contentNode.type) {
                     case ContentType.PARAGRAPH:
-                        this.element.append(this.generateParagraph(<Paragraph>contentNode, state))
+                        this.element.appendChild(this.generateParagraph(<Paragraph>contentNode, state))
                     break;
                     case ContentType.TABLE:
-                        this.element.append(this.generateTable(<Table>contentNode, state))
+                        this.element.appendChild(this.generateTable(<Table>contentNode, state))
                     break;
                     case ContentType.IMAGE:
-                        this.element.append(this.generateImage(<Image>contentNode, state))
+                        this.element.appendChild(this.generateImage(<Image>contentNode, state))
                     break;
                 }
                 state.currentPosition = state.currentPosition.getNext();
             }
         }
 
+        private formatSpan(span: HTMLSpanElement, format: Formatting): void {
+            if (format.bold) span.style.fontWeight = "bold";
+            if (format.italic) span.style.fontStyle = "italic";
+            if (format.underline) span.style.textDecoration = "underline";
+            span.style.backgroundColor = format.highlight;
+            span.style.color = format.color;
+            span.style.fontSize = format.size;
+            span.style.verticalAlign = format.pos;
+        }
+
+        private renderText(paragraph: Paragraph, container: HTMLElement, startIndex: number, endIndex: number, selected: boolean): void {
+            if (startIndex === endIndex) {
+                if (selected) {
+                    var span: HTMLSpanElement = document.createElement("span");
+                    span.className = "selected";
+                    container.appendChild(span);
+                }
+                return;
+            }
+
+            var formatIndex: number = 0; /// index into format array
+            var currentIndex: number = 0; /// index into paragraph
+            var formatRemaining: number = -1; /// number of characters remaining in current format
+
+            for (; formatIndex < paragraph.formatting.length; ++formatIndex) {
+                if (currentIndex + paragraph.formatting[formatIndex].length > /* or >= */ startIndex) {
+                    formatRemaining = paragraph.formatting[formatIndex].length - (startIndex - currentIndex);
+                    currentIndex = startIndex;
+                    break;
+                }
+                currentIndex += paragraph.formatting[formatIndex].length;
+            }
+
+            console.assert(formatRemaining !== -1, "Format Remaining must be accurate.");
+
+            while (currentIndex < endIndex)
+                (() => { // function to keep variable scope in block
+                    var format: Formatting = paragraph.formatting[formatIndex];
+                    var span: HTMLSpanElement = document.createElement("span");
+                    this.formatSpan(span, format);
+                    if (selected) span.className = "selected";
+
+                    var end: number;
+                    if (currentIndex + formatRemaining >= endIndex) {
+                        end = endIndex;
+                    } else {
+                        end = currentIndex + formatRemaining;
+                    }
+
+                    span.textContent = paragraph.getText().substring(startIndex, end);
+                    container.appendChild(span);
+
+                    ++formatIndex;
+                    if (formatIndex < paragraph.formatting.length) {
+                        formatRemaining = paragraph.formatting[formatIndex].length;
+                    }
+                    currentIndex = end;
+                })();
+
+        }
+
         private generateParagraph(paragraph: Paragraph, state: UpdateState): HTMLParagraphElement {
-            var p = $('<p>');
-            p.addClass("charSelectable");
-            p.attr("id", paragraph.id.valueOf());
-            var text = paragraph.getText();
-            var html = "";
-            var i = 0;
+
+            var i: number = 0;
+
+            var paragraphElement: HTMLParagraphElement = document.createElement("p");
+            paragraphElement.className = "charSelectable";
+            paragraphElement.id = paragraph.id.valueOf();
 
             if (state.currentPosition.equals(this.doc.selection.startPosition.getParent())) {
-                html += text.substring(0, this.doc.selection.startPosition.index);
+                this.renderText(paragraph, paragraphElement, 0, this.doc.selection.startPosition.index, false);
                 state.selectionOngoing = true;
                 i = this.doc.selection.startPosition.index;
             }
 
-            if (state.selectionOngoing) {
-                html += "<span class='selected'>";
-            }
-
             if (state.currentPosition.equals(this.doc.selection.endPosition.getParent())) {
-                html += text.substring(i, this.doc.selection.endPosition.index);
-                html += "</span>";
+                this.renderText(paragraph, paragraphElement, i, this.doc.selection.endPosition.index, state.selectionOngoing);
                 state.selectionOngoing = false;
                 i = this.doc.selection.endPosition.index;
             }
 
-            html += text.substring(i);
+            this.renderText(paragraph, paragraphElement, i, paragraph.getText().length, state.selectionOngoing);
 
-            if (state.selectionOngoing) html += "</span>";
-            p.html(html);
-
-            return <HTMLParagraphElement>p[0];
+            return paragraphElement;
         }
 
         private generateTable(table: Table, state: UpdateState): HTMLTableElement {
@@ -631,53 +655,62 @@ module tsEdit {
             return document.createElement("img");
         }
 
-        private getPos(marker: JQuery, end: boolean): DocumentPosition {
+        private makePosition(_container: Node, _offset: number): DocumentPosition {
 
-            // Calculate start positon
-            var parent: JQuery = marker.closest(".charSelectable[id]");
-            var nodeId: Guid = new Guid(parent.attr("id"));
-            var search: Guid[] = [];
-            var num: number = 0;
-            var i: number;
-
-            for (i = 0; i < parent[0].childNodes.length; i++) {
-                var node: Node = parent[0].childNodes[i];
-                if (node.nodeType == Node.TEXT_NODE) {
-                    num += (<Text>node).length;
-                } else {
-                    if (node.isSameNode(marker[0])) break;
-                    num += node.textContent.length;
+            var nodePosition = (node: ContentNode): DocumentPosition => {
+                if (node.parent.type === ContentType.DOCUMENT) {
+                    return new DocumentPosition(node.parent.contentSeries.indexOf(node.id));
                 }
-            }
-            if (end) num += marker.text().length;
+                return new DocumentPosition(node.parent.contentSeries.indexOf(node.id), nodePosition(node.parent));
+            };
 
-            var position: DocumentPosition = new DocumentPosition(num);
-            var start: DocumentPosition = position;
+            var isSelectable = (node: Node): boolean => {
+                return (node.nodeType === Node.ELEMENT_NODE)
+                    && (<HTMLElement>node).id
+                    && (<HTMLElement>node).className === "charSelectable";
+            };
 
-            var content: ContentNode;
-            do {
-                content = this.doc.contentStore.get(nodeId);
-                search.push(nodeId);
-            }
-            while (content.parent && (nodeId = content.parent.id));
+            var findSelectable = (node: Node): HTMLElement => {
+                var current: Node = node;
+                while (!isSelectable(current)) {
+                    console.assert(current.parentNode ? true : false, "Parent node must exist.");
+                    current = current.parentNode;
+                }
+                return <HTMLElement>current;
+            };
 
-            console.assert(this.doc.id.equals(search.pop()), "Document ID mismatch");
+            var findIndex = (container: Node, index: number, from: Node): number => {
+                if (container.isEqualNode(from)) { return index; }
+                return index + charactersUntil(container, from);
+            };
 
-            var contentSeries: ContentSeries = this.doc.contentSeries;
-            var next: Guid;
-            while (next = search.pop()) {
-                num = contentSeries.indexOf(next);
-                start.parent = new DocumentPosition(num);
-                start = start.parent;
-            }
+            var charactersUntil = (container: Node, from: Node): number => {
+                var current: Node = container;
+                var parent: Node = container.parentNode;
+                var acc: number = 0;
 
-            return position;
+                        do {
+                    while (current = current.previousSibling) {
+                        acc += current.textContent.length;
+                    }
+                    current = parent;
+                    parent = current.parentNode;
+                } while (!current.isEqualNode(from))
+
+                        return acc;
+            };
+
+            var startElement: HTMLElement = findSelectable(_container);
+            var startGuid: Guid = new Guid(startElement.id);
+
+            var startIndex: number = findIndex(_container, _offset, startElement);
+
+            return new DocumentPosition(
+                startIndex,
+                nodePosition(this.doc.contentStore.get(startGuid)));
+
         }
-    }
 
-    $(document).ready(function () {
-        window.rangy.init();
-        selectionApplier = window.rangy.createCssClassApplier("snew");
-    });
+    }
 
 }

@@ -23,13 +23,17 @@ p .small {
 }
 
 .selected {
-    background-color: rgba(0, 141, 255, 0.40);
+    background:
+        linear-gradient(
+          rgba(0, 141, 255, 0.40), 
+          rgba(0, 141, 255, 0.40)
+        );
 }
 
     .selected:empty::after {
         display: inline-block;
         content: ' ';
-        width: 0.5px;
+        width: 1px;
         border: 0;
         background-color: #000;
         height: 1.1em;

@@ -14,14 +14,24 @@
     </div>
     <script type="text/javascript" src="Document.js"></script>
     <script type="text/javascript">
+
         var doc = new tsEdit.Document();
 
         var p1 = new tsEdit.Paragraph(doc);
         p1.setText("First paragraph");
+        p1.formatting[0].length = p1.getText().length;
+
         var p2 = new tsEdit.Paragraph(doc);
         p2.setText("Second paragraph");
+        p2.formatting[0].length = p2.getText().length;
+
         var p3 = new tsEdit.Paragraph(doc);
         p3.setText("Third paragraph");
+        p3.formatting[0].length = p3.getText().length;
+
+        p1.validate();
+        p2.validate();
+        p3.validate();
 
         doc.contentSeries.push(p1);
         doc.contentSeries.push(p2);

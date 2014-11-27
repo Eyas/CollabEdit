@@ -53,14 +53,10 @@
   </PropertyGroup>
   <ItemGroup>
     <TypeScriptCompile Include="Document.ts" />
-    <TypeScriptCompile Include="Scripts\typings\jquery\jquery.d.ts" />
-    <TypeScriptCompile Include="Scripts\typings\rangy\rangy-classapplier.d.ts" />
-    <TypeScriptCompile Include="Scripts\typings\rangy\rangy-core.d.ts" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="demo.html" />
     <Content Include="Document.css" />
-    <Content Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="web.config" />
