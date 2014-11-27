@@ -587,7 +587,6 @@ module tsEdit {
         }
 
         Update(): void {
-            console.log(this.doc.selection.startPosition);
             while (this.element.hasChildNodes()) {
                 this.element.removeChild(this.element.lastChild);
             }
@@ -718,9 +717,13 @@ module tsEdit {
 
             var self = this;
 
+            state.currentPosition = state.currentPosition.getChild();
+
             table.contentSeries.forEach((contentNode: ContentNode): void => {
                 element.appendChild(self.generate(contentNode, state));
             });
+
+            state.currentPosition = state.currentPosition.getParent();
 
             return element;
         }
@@ -731,9 +734,13 @@ module tsEdit {
 
             var self = this;
 
+            state.currentPosition = state.currentPosition.getChild();
+
             row.contentSeries.forEach((contentNode: ContentNode): void => {
                 element.appendChild(self.generate(contentNode, state));
             });
+
+            state.currentPosition = state.currentPosition.getParent();
 
             return element;
         }
@@ -744,9 +751,13 @@ module tsEdit {
 
             var self = this;
 
+            state.currentPosition = state.currentPosition.getChild();
+
             cell.contentSeries.forEach((contentNode: ContentNode): void => {
                 element.appendChild(self.generate(contentNode, state));
             });
+
+            state.currentPosition = state.currentPosition.getParent();
 
             return element;
         }
