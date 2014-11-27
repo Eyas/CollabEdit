@@ -31,6 +31,56 @@
         p1.formatting[0].length = p1.getText().length - 10;
         p1.formatting[1].length = 10;
 
+        var t = new tsEdit.Table(doc);
+        var r1 = new tsEdit.TableRow(t);
+        var r2 = new tsEdit.TableRow(t);
+        var c11 = new tsEdit.TableCell(r1);
+        var c12 = new tsEdit.TableCell(r1);
+        var c21 = new tsEdit.TableCell(r2);
+        var c22 = new tsEdit.TableCell(r2);
+
+        var p111 = new tsEdit.Paragraph(c11);
+        var p112 = new tsEdit.Paragraph(c11);
+        var p113 = new tsEdit.Paragraph(c11);
+
+        var p121 = new tsEdit.Paragraph(c12);
+        var p211 = new tsEdit.Paragraph(c21);
+        var p221 = new tsEdit.Paragraph(c22);
+
+        p111.setText("Bleh5");
+        p111.formatting[0].length = p111.getText().length;
+
+        p112.setText("Bleasdfh5");
+        p112.formatting[0].length = p112.getText().length;
+
+        p113.setText("Third paragraph??");
+        p113.formatting[0].length = p113.getText().length;
+
+        p121.setText("Meh !");
+        p121.formatting[0].length = p121.getText().length;
+
+        p211.setText("Meh @");
+        p211.formatting[0].length = p211.getText().length;
+
+        p221.setText("Meh #");
+        p221.formatting[0].length = p221.getText().length;
+
+        c11.contentSeries.push(p111);
+        c11.contentSeries.push(p112);
+        c11.contentSeries.push(p113);
+
+        c12.contentSeries.push(p121);
+        c21.contentSeries.push(p211);
+        c22.contentSeries.push(p221);
+
+        r1.contentSeries.push(c11);
+        r1.contentSeries.push(c12);
+        r2.contentSeries.push(c21);
+        r2.contentSeries.push(c22);
+
+        t.contentSeries.push(r1);
+        t.contentSeries.push(r2);
+
         var p2 = new tsEdit.Paragraph(doc);
         p2.setText("Second paragraph");
 
@@ -53,11 +103,19 @@
         p3.validate();
 
         doc.contentSeries.push(p1);
+        doc.contentSeries.push(t);
         doc.contentSeries.push(p2);
         doc.contentSeries.push(p3);
 
+        console.log("Created");
+
         var display = new tsEdit.Display('document1', doc);
+
+        console.log("Created display");
+
         display.Update();
+
+        console.log("Update called");
         
     </script>
 </body>

@@ -372,6 +372,16 @@ module tsEdit {
             super(parent);
             this.contentSeries = new ContentSeries(parent.Document());
         }
+
+        getAtIndex(index: number): ContentNode {
+            return this.contentSeries.getNode(index);
+        }
+        hasIndex(index: number): boolean {
+            return this.contentSeries.hasIndex(index);
+        }
+        maxIndex(): number {
+            return this.contentSeries.maxIndex();
+        }
     };
     export class TableRow extends ContentNode {
         type: ContentType = ContentType.TABLE_ROW;
@@ -381,14 +391,34 @@ module tsEdit {
             super(parent);
             this.contentSeries = new ContentSeries(parent.Document());
         }
+
+        getAtIndex(index: number): ContentNode {
+            return this.contentSeries.getNode(index);
+        }
+        hasIndex(index: number): boolean {
+            return this.contentSeries.hasIndex(index);
+        }
+        maxIndex(): number {
+            return this.contentSeries.maxIndex();
+        }
     };
     export class TableCell extends ContentNode {
-        type: ContentType = ContentType.TABLE;_CELL
+        type: ContentType = ContentType.TABLE_CELL;
         contentSeries: ContentSeries;
 
         constructor(parent: TableRow) {
             super(parent);
             this.contentSeries = new ContentSeries(parent.Document());
+        }
+
+        getAtIndex(index: number): ContentNode {
+            return this.contentSeries.getNode(index);
+        }
+        hasIndex(index: number): boolean {
+            return this.contentSeries.hasIndex(index);
+        }
+        maxIndex(): number {
+            return this.contentSeries.maxIndex();
         }
     };
 
@@ -557,6 +587,7 @@ module tsEdit {
         }
 
         Update(): void {
+            console.log(this.doc.selection.startPosition);
             while (this.element.hasChildNodes()) {
                 this.element.removeChild(this.element.lastChild);
             }
@@ -641,6 +672,12 @@ module tsEdit {
                 case ContentType.TABLE:
                     e = this.generateTable(<Table>contentNode, state);
                     break;
+                case ContentType.TABLE_ROW:
+                    e = this.generateTableRow(<TableRow>contentNode, state);
+                    break;
+                case ContentType.TABLE_CELL:
+                    e = this.generateTableCell(<TableCell>contentNode, state);
+                    break;
                 case ContentType.IMAGE:
                     e = this.generateImage(<Image>contentNode, state);
                     break;
@@ -676,7 +713,42 @@ module tsEdit {
         }
 
         private generateTable(table: Table, state: UpdateState): HTMLTableElement {
-            return document.createElement("table");
+            var element: HTMLTableElement = document.createElement("table");
+            element.id = table.id.valueOf();
+
+            var self = this;
+
+            table.contentSeries.forEach((contentNode: ContentNode): void => {
+                element.appendChild(self.generate(contentNode, state));
+            });
+
+            return element;
+        }
+
+        private generateTableRow(row: TableRow, state: UpdateState): HTMLTableRowElement {
+            var element: HTMLTableRowElement = document.createElement("tr");
+            element.id = row.id.valueOf();
+
+            var self = this;
+
+            row.contentSeries.forEach((contentNode: ContentNode): void => {
+                element.appendChild(self.generate(contentNode, state));
+            });
+
+            return element;
+        }
+
+        private generateTableCell(cell: TableCell, state: UpdateState): HTMLTableDataCellElement {
+            var element: HTMLTableDataCellElement = document.createElement("td");
+            element.id = cell.id.valueOf();
+
+            var self = this;
+
+            cell.contentSeries.forEach((contentNode: ContentNode): void => {
+                element.appendChild(self.generate(contentNode, state));
+            });
+
+            return element;
         }
 
         private generateImage(image: Image, state: UpdateState): HTMLImageElement {
