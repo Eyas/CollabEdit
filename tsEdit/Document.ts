@@ -48,85 +48,108 @@ module tsEdit {
         private guid: string;
     }
 
-    export class ContentNode {
-        constructor(parent: ContentNode) {
+    export interface IContentNode {
+        id: Guid;
+        leaf: boolean;
+        type: ContentType;
+        parent: IContainingNode;
+        hasIndex(index: number): boolean;
+        maxIndex(): number;
+    }
+
+    export interface IContainingNode extends IContentNode {
+        getAtIndex(index: number): IContentNode;
+        indexOf(node: IContentNode): number;
+        getRoot(): RootDocument;
+        forEach(fn: (v: IContentNode) => void): void;
+    }
+
+    export class LeafNode implements IContentNode {
+        id: Guid;
+        leaf: boolean;
+        type: ContentType;
+        parent: IContainingNode;
+
+        constructor(parent: IContainingNode, type: ContentType) {
+            this.id = new Guid();
+            this.leaf = true;
+            this.type = type;
             this.parent = parent;
         }
-        id: Guid = new Guid();
-        leaf: boolean = false;
-        type: ContentType;
-        contentSeries: ContentSeries;
-        parent: ContentNode;
-        getAtIndex(index: number): ContentNode {
-            throw "NotImplementedException: ContentNode.getAtIndex";
-        }
+
         hasIndex(index: number): boolean {
             throw "NotImplementedException: ContentNode.hasIndex";
         }
         maxIndex(): number {
             throw "NotImplementedException: ContentNode.hasIndex";
         }
-        Document(): Document {
-            if (this.type === ContentType.DOCUMENT) return <Document>this;
-            console.assert(this.parent ? true : false, "Must have a parent");
-            return this.parent.Document();
-        }
-        nextLeaf(): ContentNode {
-            var parentIndex: number = this.parent.contentSeries.indexOf(this.id);
-            var node: ContentNode = this.parent;
+
+        nextLeaf(): LeafNode {
+            var parentIndex: number = this.parent.indexOf(this);
+            var node: IContentNode = this.parent;
 
             while (!node.hasIndex(parentIndex + 1)) { // find uncle
                 if (node.parent === null) return null;
 
-                parentIndex = node.parent.contentSeries.indexOf(node.id);
+                parentIndex = node.parent.indexOf(node);
                 node = node.parent;
             }
-            node = node.getAtIndex(parentIndex + 1);
+            node = (<IContainingNode>node).getAtIndex(parentIndex + 1);
 
             while (!node.leaf) { // find first leaf
-                node = node.getAtIndex(0);
+                node = (<IContainingNode>node).getAtIndex(0);
             }
 
-            return node;
+            return <LeafNode>node;
         }
-        prevLeaf(): ContentNode {
-            var parentIndex: number = this.parent.contentSeries.indexOf(this.id);
-            var node: ContentNode = this.parent;
+        prevLeaf(): LeafNode {
+            var parentIndex: number = this.parent.indexOf(this);
+            var node: IContentNode = this.parent;
 
             while (!node.hasIndex(parentIndex - 1)) { // find prev uncle
                 if (node.parent === null) return null;
 
-                parentIndex = node.parent.contentSeries.indexOf(node.id);
+                parentIndex = node.parent.indexOf(node);
                 node = node.parent;
             }
-            node = node.getAtIndex(parentIndex - 1);
+            node = (<IContainingNode>node).getAtIndex(parentIndex - 1);
 
             while (!node.leaf) { // find first leaf
-                node = node.getAtIndex(node.maxIndex());
+                node = (<IContainingNode>node).getAtIndex(node.maxIndex());
             }
 
-            return node;
+            return <LeafNode>node;
         }
 
     }
 
-    export class Document extends ContentNode {
-        type: ContentType = ContentType.DOCUMENT;
-        constructor() {
-            super(null);
-            this.contentSeries = new ContentSeries(this);
-            this.contentStore = new ContentStore(this);
-            this.selection = new TextRange(
-                new DocumentPosition(0, this),
-                new DocumentPosition(0, this));
+    export class ContainingNode implements IContainingNode {
+        private contentSeries: ContentSeries;
+
+        id: Guid;
+        leaf: boolean;
+        type: ContentType;
+        parent: IContainingNode;
+
+        constructor(parent: IContainingNode, type: ContentType) {
+            this.id = new Guid();
+            this.leaf = false;
+            this.type = type;
+            this.parent = parent;
+
+            this.contentSeries = new ContentSeries(this.getRoot());
         }
-        contentStore: ContentStore;
-        selection: TextRange;
 
-        private shift_state: string;
+        getRoot() {
+            if (this.type === ContentType.DOCUMENT) return <RootDocument>this;
+            return this.parent.getRoot();
+        }
 
-        getAtIndex(index: number): ContentNode {
+        getAtIndex(index: number): IContentNode {
             return this.contentSeries.getNode(index);
+        }
+        indexOf(node: IContentNode): number {
+            return this.contentSeries.indexOf(node.id);
         }
         hasIndex(index: number): boolean {
             return this.contentSeries.hasIndex(index);
@@ -134,6 +157,30 @@ module tsEdit {
         maxIndex(): number {
             return this.contentSeries.maxIndex();
         }
+        forEach(fn: (v: IContentNode) => void): void {
+            this.contentSeries.forEach(fn);
+        }
+
+        begin(): DocumentPosition {
+            var node: IContentNode = this.getAtIndex(0);
+            do {
+                if (node === null) return null;
+                if (node.leaf) return new DocumentPosition(0, <LeafNode>node);
+                node = (<IContainingNode>node).getAtIndex(0);
+            } while (true);
+        }
+    }
+
+    export class RootDocument extends ContainingNode {
+        constructor() {
+            super(null, ContentType.DOCUMENT);
+            this.contentStore = new ContentStore(this);
+            this.selection = null;
+        }
+        contentStore: ContentStore;
+        selection: TextRange;
+
+        private shift_state: string;
 
         private finalize_shift(shift: boolean, pos: DocumentPosition): void {
             if (shift) {
@@ -277,19 +324,19 @@ module tsEdit {
     };
 
     export class ContentSeries {
-        contentNodes: ContentNode[] = [];
-        doc: Document;
+        contentNodes: IContentNode[] = [];
+        doc: RootDocument;
 
-        constructor(doc: Document) {
+        constructor(doc: RootDocument) {
             this.doc = doc;
         }
-        getNode(index: number): ContentNode { return this.contentNodes[index]; }
+        getNode(index: number): IContentNode { return this.contentNodes[index]; }
         hasIndex(index: number): boolean { return (this.contentNodes[index]) ? true : false; }
         maxIndex(): number { return this.contentNodes.length - 1; }
-        forEach(fn: (v: ContentNode) => void): void {
+        forEach(fn: (v: IContentNode) => void): void {
             this.contentNodes.forEach(fn);
         }
-        push(node: ContentNode): void {
+        push(node: IContentNode): void {
             this.contentNodes.push(node);
             this.doc.contentStore.put(node);
         }
@@ -302,26 +349,21 @@ module tsEdit {
         }
     }
 
-    export class Paragraph extends ContentNode {
+    export class Paragraph extends LeafNode {
         private text: string;
         formatting: Formatting[] = [new Formatting()];
-        type: ContentType = ContentType.PARAGRAPH;
-        leaf: boolean = true;
+
         contentSeries: ContentSeries = null;
-        constructor(parent: ContentNode) {
-            super(parent);
+        constructor(parent: ContainingNode) {
+            super(parent, ContentType.PARAGRAPH);
         }
         setText(text: string): void { this.text = text; }
         getText(): string { return this.text; }
         validate(): void {
             var expectedLength: number = this.text.length;
-            var actualLength: number = 0;
-            this.formatting.forEach(function (fmt) {
-                actualLength += fmt.length;
-            });
+            var actualLength: number = this.formatting.map((fmt) => { return fmt.length }).reduce((a, b) => { return a + b });
             console.assert(actualLength === expectedLength, "Expected paragraph length is " + expectedLength + " actual: " + actualLength);
         }
-        getAtIndex(index: number): ContentNode { return this; }
         hasIndex(index: number): boolean {
             return (index >= 0 && index <= this.text.length)
         }
@@ -353,108 +395,56 @@ module tsEdit {
         }
     }
 
-    export class Table extends ContentNode {
-        type: ContentType = ContentType.TABLE;
-        contentSeries: ContentSeries;
-
-        constructor(parent: ContentNode) {
-            super(parent);
-            this.contentSeries = new ContentSeries(parent.Document());
-        }
-
-        getAtIndex(index: number): ContentNode {
-            return this.contentSeries.getNode(index);
-        }
-        hasIndex(index: number): boolean {
-            return this.contentSeries.hasIndex(index);
-        }
-        maxIndex(): number {
-            return this.contentSeries.maxIndex();
+    export class Table extends ContainingNode {
+        constructor(parent: ContainingNode) {
+            super(parent, ContentType.TABLE);
         }
     };
-    export class TableRow extends ContentNode {
-        type: ContentType = ContentType.TABLE_ROW;
-        contentSeries: ContentSeries;
 
+    export class TableRow extends ContainingNode {
         constructor(parent: Table) {
-            super(parent);
-            this.contentSeries = new ContentSeries(parent.Document());
-        }
-
-        getAtIndex(index: number): ContentNode {
-            return this.contentSeries.getNode(index);
-        }
-        hasIndex(index: number): boolean {
-            return this.contentSeries.hasIndex(index);
-        }
-        maxIndex(): number {
-            return this.contentSeries.maxIndex();
+            super(parent, ContentType.TABLE_ROW);
         }
     };
-    export class TableCell extends ContentNode {
-        type: ContentType = ContentType.TABLE_CELL;
-        contentSeries: ContentSeries;
 
+    export class TableCell extends ContainingNode {
         constructor(parent: TableRow) {
-            super(parent);
-            this.contentSeries = new ContentSeries(parent.Document());
-        }
-
-        getAtIndex(index: number): ContentNode {
-            return this.contentSeries.getNode(index);
-        }
-        hasIndex(index: number): boolean {
-            return this.contentSeries.hasIndex(index);
-        }
-        maxIndex(): number {
-            return this.contentSeries.maxIndex();
+            super(parent, ContentType.TABLE_CELL);
         }
     };
 
-    export class Image extends ContentNode { };
+    export class Image extends LeafNode { };
 
     //#endregion
 
     //#region Content Access
     export class ContentStore {
-        private contentNodes: { [guid: string]: ContentNode } = {};
-        private doc: Document;
+        private contentNodes: { [guid: string]: IContentNode } = {};
+        private doc: RootDocument;
 
-        constructor(doc: Document) {
+        constructor(doc: RootDocument) {
             this.doc = doc;
             this.contentNodes[doc.id.toString()] = doc;
         }
-        get(guid: Guid): ContentNode {
+        get(guid: Guid): IContentNode {
             return this.contentNodes[guid.toString()];
         }
-        put(node: ContentNode): void {
+        put(node: IContentNode): void {
             this.contentNodes[node.id.toString()] = node;
         }
     };
 
     //#endregion
 
-    //#region Document Interaction Representation
+    //#region RootDocument Interaction Representation
     export class DocumentPosition {
         index: number;
-        node: ContentNode;
+        node: LeafNode;
 
-        constructor(index: number, node: ContentNode) {
+        constructor(index: number, node: LeafNode) {
             this.index = index;
             this.node = node;
         }
-        /*equals(other: DocumentPosition): boolean {
-            if (other === undefined || other === null) return false;
-            if (this.index !== other.index) return false;
-
-            if (this.parent) {
-                if (!other.parent)
-                    return false;
-                return this.parent.equals(other.parent);
-            } else {
-                return (!other.parent);
-            }
-        }*/
         toString(): string {
             return "[" + this.node.id.toString() + ":" + this.index.pad(7) + "]";
         }
@@ -462,14 +452,14 @@ module tsEdit {
             if (this.node.hasIndex(this.index + 1)) {
                 return new DocumentPosition(this.index + 1, this.node);
             }
-            var node: ContentNode = this.node.nextLeaf();
+            var node: LeafNode = this.node.nextLeaf();
             return node ? new DocumentPosition(0, node) : null;
         }
         getPrevious(): DocumentPosition {
             if (this.node.hasIndex(this.index - 1)) {
                 return new DocumentPosition(this.index - 1, this.node);
             }
-            var prevNode: ContentNode = this.node.prevLeaf();
+            var prevNode: LeafNode = this.node.prevLeaf();
             return prevNode ? new DocumentPosition(prevNode.maxIndex(), prevNode) : null;
         }
 
@@ -489,7 +479,7 @@ module tsEdit {
 
     //#endregion
 
-    //#region Document Interaction Manipulation
+    //#region RootDocument Interaction Manipulation
     class ReplaceArgs {
         selection: TextRange;
         text: string;
@@ -509,7 +499,7 @@ module tsEdit {
     }
     //#endregion
 
-    //#region Document Display
+    //#region RootDocument Display
     class UpdateState {
         selectionOngoing: boolean = false;
     };
@@ -517,9 +507,9 @@ module tsEdit {
     export class Display {
         private element: HTMLElement;
         private html: string = "";
-        private doc: Document;
+        private doc: RootDocument;
 
-        constructor(id: string, doc: Document) {
+        constructor(id: string, doc: RootDocument) {
             var self = this;
             self.doc = doc;
 
@@ -568,11 +558,11 @@ module tsEdit {
             while (this.element.hasChildNodes()) {
                 this.element.removeChild(this.element.lastChild);
             }
-
+            if (this.doc.selection === null) this.doc.selection = new TextRange(this.doc.begin(), this.doc.begin());
             var state: UpdateState = new UpdateState();
             var self = this;
 
-            this.doc.contentSeries.forEach((contentNode: ContentNode): void => {
+            this.doc.forEach((contentNode: IContentNode): void => {
                 self.element.appendChild(self.generate(contentNode, state));
             });
 
@@ -639,7 +629,7 @@ module tsEdit {
 
         }
 
-        private generate(contentNode: ContentNode, state: UpdateState): HTMLElement {
+        private generate(contentNode: IContentNode, state: UpdateState): HTMLElement {
             var e: HTMLElement;
 
             switch (contentNode.type) {
@@ -694,7 +684,7 @@ module tsEdit {
 
             var self = this;
 
-            table.contentSeries.forEach((contentNode: ContentNode): void => {
+            table.forEach((contentNode: IContentNode): void => {
                 element.appendChild(self.generate(contentNode, state));
             });
 
@@ -707,7 +697,7 @@ module tsEdit {
 
             var self = this;
 
-            row.contentSeries.forEach((contentNode: ContentNode): void => {
+            row.forEach((contentNode: IContentNode): void => {
                 element.appendChild(self.generate(contentNode, state));
             });
 
@@ -720,7 +710,7 @@ module tsEdit {
 
             var self = this;
 
-            cell.contentSeries.forEach((contentNode: ContentNode): void => {
+            cell.forEach((contentNode: IContentNode): void => {
                 element.appendChild(self.generate(contentNode, state));
             });
 
@@ -776,7 +766,7 @@ module tsEdit {
 
             return new DocumentPosition(
                 startIndex,
-                this.doc.contentStore.get(startGuid));
+                <LeafNode>this.doc.contentStore.get(startGuid));
 
         }
 
