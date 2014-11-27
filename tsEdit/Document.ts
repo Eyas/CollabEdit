@@ -10,6 +10,8 @@ module tsEdit {
         DOCUMENT,
         PARAGRAPH,
         TABLE,
+        TABLE_ROW,
+        TABLE_CELL,
         IMAGE
     }
 
@@ -62,6 +64,11 @@ module tsEdit {
         }
         maxIndex(): number {
             throw "NotImplementedException: ContentNode.hasIndex";
+        }
+        Document(): Document {
+            if (this.type === ContentType.DOCUMENT) return <Document>this;
+            console.assert(this.parent ? true : false, "Must have a parent");
+            return this.parent.Document();
         }
 
     }
@@ -291,8 +298,8 @@ module tsEdit {
         getNode(index: number): ContentNode { return this.contentNodes[index]; }
         hasIndex(index: number): boolean { return (this.contentNodes[index]) ? true : false; }
         maxIndex(): number { return this.contentNodes.length - 1; }
-        getIterator(): ContentIterator {
-            return new ContentIterator(this.contentNodes.slice(0));
+        forEach(fn: (v: ContentNode) => void): void {
+            this.contentNodes.forEach(fn);
         }
         push(node: ContentNode): void {
             this.contentNodes.push(node);
@@ -357,9 +364,33 @@ module tsEdit {
         }
     }
 
-    export class Table extends ContentNode { };
-    export class TableRow extends ContentNode { };
-    export class TableCell extends ContentNode { };
+    export class Table extends ContentNode {
+        type: ContentType = ContentType.TABLE;
+        contentSeries: ContentSeries;
+
+        constructor(parent: ContentNode) {
+            super(parent);
+            this.contentSeries = new ContentSeries(parent.Document());
+        }
+    };
+    export class TableRow extends ContentNode {
+        type: ContentType = ContentType.TABLE_ROW;
+        contentSeries: ContentSeries;
+
+        constructor(parent: Table) {
+            super(parent);
+            this.contentSeries = new ContentSeries(parent.Document());
+        }
+    };
+    export class TableCell extends ContentNode {
+        type: ContentType = ContentType.TABLE;_CELL
+        contentSeries: ContentSeries;
+
+        constructor(parent: TableRow) {
+            super(parent);
+            this.contentSeries = new ContentSeries(parent.Document());
+        }
+    };
 
     export class Image extends ContentNode { };
 
@@ -382,16 +413,6 @@ module tsEdit {
         }
     };
 
-    export class ContentIterator {
-        private array: ContentNode[];
-        private index: number = 0;
-        constructor(array: ContentNode[]) {
-            this.array = array;
-        }
-        nextNode(): ContentNode {
-            return this.array[this.index++];
-        }
-    }
     //#endregion
 
     //#region Document Interaction Representation
@@ -540,25 +561,13 @@ module tsEdit {
                 this.element.removeChild(this.element.lastChild);
             }
 
-            var iterator: ContentIterator = this.doc.contentSeries.getIterator();
-
             var state: UpdateState = new UpdateState();
-            var contentNode: ContentNode;
+            var self = this;
 
-            while ((contentNode = iterator.nextNode()) !== undefined) {
-                switch (contentNode.type) {
-                    case ContentType.PARAGRAPH:
-                        this.element.appendChild(this.generateParagraph(<Paragraph>contentNode, state))
-                    break;
-                    case ContentType.TABLE:
-                        this.element.appendChild(this.generateTable(<Table>contentNode, state))
-                    break;
-                    case ContentType.IMAGE:
-                        this.element.appendChild(this.generateImage(<Image>contentNode, state))
-                    break;
-                }
-                state.currentPosition = state.currentPosition.getNext();
-            }
+            this.doc.contentSeries.forEach((contentNode: ContentNode): void => {
+                self.element.appendChild(self.generate(contentNode, state));
+            });
+
         }
 
         private formatSpan(span: HTMLSpanElement, format: Formatting): void {
@@ -620,6 +629,25 @@ module tsEdit {
                     currentIndex = end;
                 })();
 
+        }
+
+        private generate(contentNode: ContentNode, state: UpdateState): HTMLElement {
+            var e: HTMLElement;
+
+            switch (contentNode.type) {
+                case ContentType.PARAGRAPH:
+                    e = this.generateParagraph(<Paragraph>contentNode, state);
+                    break;
+                case ContentType.TABLE:
+                    e = this.generateTable(<Table>contentNode, state);
+                    break;
+                case ContentType.IMAGE:
+                    e = this.generateImage(<Image>contentNode, state);
+                    break;
+                default: throw "Invalid ContentNode Type";
+            }
+            state.currentPosition = state.currentPosition.getNext();
+            return e;
         }
 
         private generateParagraph(paragraph: Paragraph, state: UpdateState): HTMLParagraphElement {
