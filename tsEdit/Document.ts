@@ -566,16 +566,16 @@ module tsEdit {
                 var s: Selection = window.getSelection();
                 if (s.isCollapsed) {
                     var range: Range = s.getRangeAt(0);
-                    var p: DocumentPosition = self.makePosition(range.startContainer, range.startOffset);
-                    if (p) {
-                        self.doc.selection = new TextRange(p, p);
+                    var p = self.makePosition(range.startContainer, range.startOffset);
+                    if (p.hasValue) {
+                        self.doc.selection = new TextRange(p.value(), p.value());
                     }
                 } else {
                     var range: Range = s.getRangeAt(0);
-                    var p1: DocumentPosition = self.makePosition(range.startContainer, range.startOffset);
-                    var p2: DocumentPosition = self.makePosition(range.endContainer, range.endOffset);
-                    if (p1 && p2) {
-                        self.doc.selection = new TextRange(p1, p2);
+                    var p1 = self.makePosition(range.startContainer, range.startOffset);
+                    var p2 = self.makePosition(range.endContainer, range.endOffset);
+                    if (p1.hasValue && p2.hasValue) {
+                        self.doc.selection = new TextRange(p1.value(), p2.value());
                     }
                 }
 
@@ -775,7 +775,7 @@ module tsEdit {
             return document.createElement("img");
         }
 
-        private makePosition(_container: Node, _offset: number): DocumentPosition {
+        private makePosition(_container: Node, _offset: number): Maybe<DocumentPosition> {
 
             var isSelectable = (node: Node): boolean => {
                 return (node.nodeType === Node.ELEMENT_NODE)
@@ -814,15 +814,15 @@ module tsEdit {
             };
 
             var startElement: HTMLElement = findSelectable(_container);
-            if (startElement === null) return null;
+            if (startElement === null) return new Nothing<DocumentPosition>();
 
             var startGuid: Guid = new Guid(startElement.id);
 
             var startIndex: number = findIndex(_container, _offset, startElement);
 
-            return new DocumentPosition(
+            return new Some(new DocumentPosition(
                 startIndex,
-                <LeafNode>this.doc.get(startGuid));
+                <LeafNode>this.doc.get(startGuid)));
 
         }
 
