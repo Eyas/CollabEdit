@@ -38,7 +38,8 @@ module tsEdit {
         Right = 39,
         Down = 40,
         Backspace = 8,
-        Delete = 46
+        Delete = 46,
+        Enter = 13
     }
 
     var Keys = {
@@ -47,8 +48,21 @@ module tsEdit {
         Right: "Right",
         Down: "Down",
         Backspace: "Backspace",
-        Delete: "Delete"
+        Delete: "Delete",
+        Enter: "Enter"
     }
+
+    var toKey: (number) => string = (keyCode: number): string => {
+        switch (keyCode) {
+            case LegacyKeys.Left: return Keys.Left;
+            case LegacyKeys.Up: return Keys.Up;
+            case LegacyKeys.Right: return Keys.Right;
+            case LegacyKeys.Down: return Keys.Down;
+            case LegacyKeys.Backspace: return Keys.Backspace;
+            case LegacyKeys.Delete: return Keys.Delete;
+            case LegacyKeys.Enter: return Keys.Enter;
+        }
+    };
 
     export class Guid {
         constructor(guidString?: string) {
@@ -718,48 +732,34 @@ module tsEdit {
 
             document.addEventListener("keydown", function (event) {
                 var handled = true;
-                if (event.key) {
-                    switch (event.key) {
-                        case Keys.Right:
-                            self.doc.selectRight(event.shiftKey);
-                            break;
-                        case Keys.Left:
-                            self.doc.selectLeft(event.shiftKey);
-                            break;
-                        case Keys.Up:
-                            self.doc.selectUp(event.shiftKey);
-                            break;
-                        case Keys.Down:
-                            self.doc.selectDown(event.shiftKey);
-                            break;
-                        case Keys.Delete:
-                        case Keys.Backspace:
-                            var change: ReplaceArgs = new ReplaceArgs(self.doc.selection, "");
-                            self.doc.applyChange(change);
-                            break;
-                        default: handled = false;
-                    }
-                } else if (event.which) {
-                    switch (event.which) {
-                        case LegacyKeys.Right:
-                            self.doc.selectRight(event.shiftKey);
-                            break;
-                        case LegacyKeys.Left:
-                            self.doc.selectLeft(event.shiftKey);
-                            break;
-                        case LegacyKeys.Up:
-                            self.doc.selectUp(event.shiftKey);
-                            break;
-                        case LegacyKeys.Down:
-                            self.doc.selectDown(event.shiftKey);
-                            break;
-                        case LegacyKeys.Backspace:
-                        case LegacyKeys.Delete:
-                            var change: ReplaceArgs = new ReplaceArgs(self.doc.selection, "");
-                            self.doc.applyChange(change);
-                            break;
-                        default: handled = false;
-                    }
+
+                switch (event.key || toKey(event.which)) {
+                    case Keys.Right:
+                        self.doc.selectRight(event.shiftKey);
+                        break;
+                    case Keys.Left:
+                        self.doc.selectLeft(event.shiftKey);
+                        break;
+                    case Keys.Up:
+                        self.doc.selectUp(event.shiftKey);
+                        break;
+                    case Keys.Down:
+                        self.doc.selectDown(event.shiftKey);
+                        break;
+                    case Keys.Delete:
+                        if (self.doc.selection.isCollapsed()) self.doc.selectRight(true);
+                        var change: ReplaceArgs = new ReplaceArgs(self.doc.selection, "");
+                        self.doc.applyChange(change);
+                        break;
+                    case Keys.Backspace:
+                        if (self.doc.selection.isCollapsed()) self.doc.selectLeft(true);
+                        var change: ReplaceArgs = new ReplaceArgs(self.doc.selection, "");
+                        self.doc.applyChange(change);
+                        break;
+                    case Keys.Enter:
+                        // TODO
+                        break;
+                    default: handled = false;
                 }
 
                 self.Update();
