@@ -31,7 +31,7 @@ module Functional {
         private _value: T;
     }
 
-    export class Nothing<T> implements Maybe<T> {
+    class Nothing<T> implements Maybe<T> {
         hasValue: boolean = false;
         value(): T { throw new Error("Trying to access value of nothing."); }
         map<U>(fn: (v: T) => U): Nothing<U> {
@@ -45,5 +45,7 @@ module Functional {
             return "Nothing";
         }
     }
+
+    export var None: Maybe<typeof undefined> = new Nothing<typeof undefined>();
 
 }

@@ -154,3 +154,5 @@ $RECYCLE.BIN/
 .DS_Store
 /tsEdit/Document.js
 /tsEdit/Document.js.map
+/tsEdit/Functional.js
+/tsEdit/Functional.js.map

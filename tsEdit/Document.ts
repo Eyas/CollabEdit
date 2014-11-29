@@ -9,8 +9,8 @@ String.prototype.replaceRange = function (start: number, end: number, replace: s
 module tsEdit {
 
     export interface Maybe<T> extends Functional.Maybe<T> { }
-    export class Some<T> extends Functional.Some<T> { }
-    export class Nothing<T> extends Functional.Nothing<T> { }
+    class Some<T> extends Functional.Some<T> { }
+    var None = Functional.None;
 
     export enum ContentType {
         DOCUMENT,
@@ -138,7 +138,7 @@ module tsEdit {
             var node: IContentNode = this.parent.value();
 
             while (!node.hasIndex(parentIndex + 1)) { // find uncle
-                if (node.parent.hasValue === false) return new Nothing<LeafNode>();
+                if (node.parent.hasValue === false) return None;
 
                 parentIndex = node.parent.value().indexOf(node);
                 node = node.parent.value();
@@ -152,7 +152,7 @@ module tsEdit {
             var node: IContentNode = this.parent.value();
 
             while (!node.hasIndex(parentIndex - 1)) { // find prev uncle
-                if (node.parent.hasValue === false) return new Nothing<LeafNode>();
+                if (node.parent.hasValue === false) return None;
 
                 parentIndex = node.parent.value().indexOf(node);
                 node = node.parent.value();
@@ -218,7 +218,7 @@ module tsEdit {
 
     export class RootDocument extends ContainingNode {
         constructor() {
-            super(new Nothing<ContainingNode>(), ContentType.DOCUMENT);
+            super(None, ContentType.DOCUMENT);
             this.contentStore = new ContentStore(this);
             this.selection = null;
             this.shift_state = ShiftState.COLLAPSED;
@@ -416,7 +416,7 @@ module tsEdit {
         }
         getNode(index: number): Maybe<IContentNode> {
             var result = this.contentNodes[index];
-            return result ? new Some(result) : new Nothing<IContentNode>();
+            return result ? new Some(result) : None;
         }
         hasIndex(index: number): boolean { return (this.contentNodes[index]) ? true : false; }
         maxIndex(): number { return this.contentNodes.length - 1; }
@@ -982,7 +982,7 @@ module tsEdit {
             };
 
             var startElement: HTMLElement = findSelectable(_container);
-            if (startElement === null) return new Nothing<DocumentPosition>();
+            if (startElement === null) return None;
 
             var startGuid: Guid = new Guid(startElement.id);
 
