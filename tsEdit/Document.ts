@@ -625,7 +625,7 @@ module tsEdit {
             if (this._node.id.equals(other._node.id)) {
                 return this._index < other._index;
             }
-            var next: Maybe<LeafNode> = new Some<LeafNode>(this._node);
+            var next: Maybe<LeafNode> = new Some(this._node);
             while (next.hasValue) {
                 if (next.value().id.equals(other._node.id)) {
                     return true;
