@@ -8,18 +8,22 @@ module Functional {
         mapRecurse<U>(fn: (v: T) => Maybe<U>): Maybe<U>;
     }
 
-    export class Some<T> implements Maybe<T> {
+    class Just<T> implements Maybe<T> {
         hasValue: boolean = true;
         value(): T { return this._value; }
-        map<U>(fn: (v: T) => U): Some<U> {
-            return new Some<U>(fn(this._value));
+        map<U>(fn: (v: T) => U): Just<U> {
+            return new Just<U>(fn(this._value));
         }
         mapRecurse<U>(fn: (v: T) => Maybe<U>): Maybe<U> {
             return fn(this._value);
         }
 
         toString(): string {
-            return "Some(" + this._value.toString() + ")";
+            return "Just(" + this._value.toString() + ")";
+        }
+
+        valueOf(): any {
+            return this._value.valueOf();
         }
 
         constructor(value: T) {
@@ -44,8 +48,15 @@ module Functional {
         toString(): string {
             return "Nothing";
         }
+
+        valueOf(): any {
+            return undefined;
+        }
     }
 
     export var None: Maybe<typeof undefined> = new Nothing<typeof undefined>();
+    export function Some<T>(some: T): Maybe<T> {
+        return new Just<T>(some);
+    }
 
 }

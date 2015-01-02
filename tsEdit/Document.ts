@@ -9,7 +9,7 @@ String.prototype.replaceRange = function (start: number, end: number, replace: s
 module tsEdit {
 
     export interface Maybe<T> extends Functional.Maybe<T> { }
-    class Some<T> extends Functional.Some<T> { }
+    var Some = Functional.Some;
     var None = Functional.None;
 
     export enum ContentType {
@@ -115,7 +115,7 @@ module tsEdit {
             this.id = new Guid();
             this.leaf = true;
             this.type = type;
-            this.parent = new Some(parent);
+            this.parent = Some(parent);
         }
 
         validate(): void {
@@ -128,10 +128,10 @@ module tsEdit {
             throw new Error("NotImplementedException: LeafNode.maxIndex");
         }
         firstLeaf(): Maybe<LeafNode> {
-            return new Some(this);
+            return Some(this);
         }
         lastLeaf(): Maybe<LeafNode> {
-            return new Some(this);
+            return Some(this);
         }
         nextLeaf(): Maybe<LeafNode> {
             var parentIndex: number = this.parent.value().indexOf(this);
@@ -416,7 +416,7 @@ module tsEdit {
         }
         getNode(index: number): Maybe<IContentNode> {
             var result = this.contentNodes[index];
-            return result ? new Some(result) : None;
+            return result ? Some(result) : None;
         }
         hasIndex(index: number): boolean { return (this.contentNodes[index]) ? true : false; }
         maxIndex(): number { return this.contentNodes.length - 1; }
@@ -538,7 +538,7 @@ module tsEdit {
 
     export class Table extends ContainingNode {
         constructor(parent: ContainingNode) {
-            super(new Some(parent), ContentType.TABLE);
+            super(Some(parent), ContentType.TABLE);
         }
         validate() {
             this.forEach((node: IContentNode) => {
@@ -550,7 +550,7 @@ module tsEdit {
 
     export class TableRow extends ContainingNode {
         constructor(parent: Table) {
-            super(new Some(parent), ContentType.TABLE_ROW);
+            super(Some(parent), ContentType.TABLE_ROW);
         }
         validate() {
             this.forEach((node: IContentNode) => {
@@ -562,7 +562,7 @@ module tsEdit {
 
     export class TableCell extends ContainingNode {
         constructor(parent: TableRow) {
-            super(new Some(parent), ContentType.TABLE_CELL);
+            super(Some(parent), ContentType.TABLE_CELL);
         }
     };
 
@@ -603,7 +603,7 @@ module tsEdit {
         }
         getNext(): Maybe<DocumentPosition> {
             if (this._node.hasIndex(this._index + 1)) {
-                return new Some(new DocumentPosition(this._index + 1, this._node));
+                return Some(new DocumentPosition(this._index + 1, this._node));
             }
             return this._node.nextLeaf().map((n: LeafNode): DocumentPosition => {
                 return new DocumentPosition(0, n);
@@ -612,7 +612,7 @@ module tsEdit {
         }
         getPrevious(): Maybe<DocumentPosition> {
             if (this._node.hasIndex(this._index - 1)) {
-                return new Some(new DocumentPosition(this._index - 1, this._node));
+                return Some(new DocumentPosition(this._index - 1, this._node));
             }
             return this._node.prevLeaf().map((n: LeafNode): DocumentPosition => {
                 return new DocumentPosition(n.maxIndex(), n);
@@ -625,7 +625,7 @@ module tsEdit {
             if (this._node.id.equals(other._node.id)) {
                 return this._index < other._index;
             }
-            var next: Maybe<LeafNode> = new Some(this._node);
+            var next: Maybe<LeafNode> = Some(this._node);
             while (next.hasValue) {
                 if (next.value().id.equals(other._node.id)) {
                     return true;
@@ -988,7 +988,7 @@ module tsEdit {
 
             var startIndex: number = findIndex(_container, _offset, startElement);
 
-            return new Some(new DocumentPosition(
+            return Some(new DocumentPosition(
                 startIndex,
                 <LeafNode>this.doc.get(startGuid)));
 
