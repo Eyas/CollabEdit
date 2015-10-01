@@ -1,62 +1,53 @@
 ﻿
 module Functional {
-
-    export interface Maybe<T> {
-        hasValue: boolean;
-        value(): T;
-        map<U>(fn: (v: T) => U): Maybe<U>;
-        mapRecurse<U>(fn: (v: T) => Maybe<U>): Maybe<U>;
+    
+    interface MaybeUtil<T> {
+        Map<U>(f: (t: T)=>U): Maybe<U>;
+        FlatMap<U>(f: (t: T)=>Maybe<U>): Maybe<U>;
+        Filter(f: (t: T)=>boolean): Maybe<T>;
+        GetOrElse(els: T): T;
     }
-
-    class Just<T> implements Maybe<T> {
-        hasValue: boolean = true;
-        value(): T { return this._value; }
-        map<U>(fn: (v: T) => U): Just<U> {
-            return new Just<U>(fn(this._value));
-        }
-        mapRecurse<U>(fn: (v: T) => Maybe<U>): Maybe<U> {
-            return fn(this._value);
-        }
-
-        toString(): string {
-            return "Just(" + this._value.toString() + ")";
-        }
-
-        valueOf(): any {
-            return this._value.valueOf();
-        }
-
+    
+    export type Nothing<T> = MaybeUtil<T> & {
+        None: void,
+    };
+    
+    export var None: Nothing<any> = {
+        None: undefined,
+        Map: () => None,
+        FlatMap: () => None,
+        Filter: () => None,
+        GetOrElse: (els: any) => els
+    }
+    
+    export class Just<T> implements MaybeUtil<T> {
         constructor(value: T) {
             if (value === null || value === undefined) {
                 throw new Error("Trying to instantiate Some with null or undefined value.");
             }
-            this._value = value;
+            this.Value = value;
         }
-        private _value: T;
+        Map<U>(f: (t: T)=>U): Just<U> { 
+            return new Just(f(this.Value));
+        }
+        FlatMap<U>(f: (t: T)=>Maybe<U>): Maybe<U> {
+            return f(this.Value);
+        }
+        Filter(f: (t: T)=>boolean): Maybe<T> {
+            return f(this.Value) ? this : None;
+        }
+        GetOrElse(): T { return this.Value; }
+        Value: T;
     }
-
-    class Nothing<T> implements Maybe<T> {
-        hasValue: boolean = false;
-        value(): T { throw new Error("Trying to access value of nothing."); }
-        map<U>(fn: (v: T) => U): Nothing<U> {
-            return new Nothing<U>();
-        }
-        mapRecurse<U>(fn: (v: T) => Maybe<U>): Maybe<U> {
-            return new Nothing<U>();
-        }
-
-        toString(): string {
-            return "Nothing";
-        }
-
-        valueOf(): any {
-            return undefined;
-        }
+    
+    export type Maybe<T> = Nothing<T> | Just<T>;
+    
+    export function HasValue<T>(m: Maybe<T>): m is Just<T> {
+        return !m.hasOwnProperty("None") && m.hasOwnProperty("Value");
     }
-
-    export var None: Maybe<typeof undefined> = new Nothing<typeof undefined>();
-    export function Some<T>(some: T): Maybe<T> {
-        return new Just<T>(some);
+    
+    export function Some<T>(t: T): Just<T> {
+        return new Just(t);
     }
 
 }

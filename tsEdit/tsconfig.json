@@ -1,0 +1,10 @@
+{
+	"compilerOptions": {
+		"module": "commonjs",
+		"noImplicitAny": true,
+		"removeComments": true,
+		"outDir": "../built/tsEdit/js/",
+		"sourceMap": true,
+		"target": "ES5"
+	}
+}
